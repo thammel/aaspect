@@ -9,11 +9,19 @@ description = "Analysis tool for corpora of Asset Administration Shells, based o
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = []
+dependencies = [
+  "fastapi",
+  "jinja2",
+  "jsonschema-rs>=0.58.6", # Earliest version tested against the official AAS schemas.
+  "lxml",
+  "python-multipart", # FastAPI needs it to parse file uploads.
+  "uvicorn",
+]
 
 [dependency-groups]
 dev = [
   "coverage", # Measures test coverage and enforces minimum coverage in CI.
+  "httpx",    # Required by FastAPI's TestClient.
   "pyright",  # Static type checker for Python.
   "ruff",     # Formatter, linter, and import sorter.
 ]
