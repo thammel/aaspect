@@ -24,6 +24,7 @@ dev = [
   "httpx",    # Required by FastAPI's TestClient.
   "pyright",  # Static type checker for Python.
   "ruff",     # Formatter, linter, and import sorter.
+  "types-lxml>=2026.2.16",
 ]
 
 [tool.hatch.build.targets.sdist]
