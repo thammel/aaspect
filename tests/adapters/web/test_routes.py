@@ -17,6 +17,8 @@ LIMITS = WebLimits(
     max_upload_bytes=10_000, max_files=3, max_concurrent_analyses=1, max_stored_reports=2
 )
 
+HOSTS = ["testserver"]
+
 
 class FakeAnalyse:
     def __init__(self) -> None:
@@ -34,7 +36,7 @@ def _files(*names: str, content: bytes = b"{}") -> list[tuple[str, tuple[str, by
 class TestRoutes(unittest.TestCase):
     def setUp(self) -> None:
         self.analyse = FakeAnalyse()
-        self.client = TestClient(create_app(self.analyse, JsonReportWriter(), LIMITS))
+        self.client = TestClient(create_app(self.analyse, JsonReportWriter(), LIMITS, HOSTS))
 
     def _upload(self, files: list, version: str = "auto"):
         return self.client.post(
@@ -115,7 +117,7 @@ class TestRoutes(unittest.TestCase):
             release.wait(10)
             return full_report()
 
-        client = TestClient(create_app(slow, JsonReportWriter(), LIMITS))
+        client = TestClient(create_app(slow, JsonReportWriter(), LIMITS, HOSTS))
         first = threading.Thread(target=lambda: client.post("/analyses", files=_files("a.json")))
         first.start()
         self.assertTrue(started.wait(10))
@@ -129,6 +131,30 @@ class TestRoutes(unittest.TestCase):
         for _ in range(3):
             self.assertEqual(self._upload(_files("a.json"), "4.0").status_code, 400)
             self.assertEqual(self._upload(_files("a.json")).status_code, 303)
+
+    def test_cross_site_posts_are_refused(self) -> None:
+        for headers in (
+            {"sec-fetch-site": "cross-site"},
+            {"sec-fetch-site": "same-site"},
+            {"origin": "https://evil.example"},
+        ):
+            with self.subTest(headers=headers):
+                response = self.client.post(
+                    "/analyses", files=_files("a.json"), headers=headers, follow_redirects=False
+                )
+                self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.analyse.calls, [])
+
+    def test_same_origin_posts_pass(self) -> None:
+        for headers in ({"sec-fetch-site": "same-origin"}, {"origin": "http://testserver"}):
+            with self.subTest(headers=headers):
+                response = self.client.post(
+                    "/analyses", files=_files("a.json"), headers=headers, follow_redirects=False
+                )
+                self.assertEqual(response.status_code, 303)
+
+    def test_unknown_host_is_refused(self) -> None:
+        self.assertEqual(self.client.get("/", headers={"host": "evil.example"}).status_code, 400)
 
     def test_upload_script_is_served(self) -> None:
         response = self.client.get("/static/upload.js")

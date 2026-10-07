@@ -46,7 +46,8 @@ def build_app(settings: Settings, resources: ExitStack) -> FastAPI:
         max_concurrent_analyses=settings.max_concurrent_analyses,
         max_stored_reports=settings.max_stored_reports,
     )
-    return create_app(analyse.run, JsonReportWriter(), limits)
+    allowed_hosts = [host.strip() for host in settings.allowed_hosts.split(",") if host.strip()]
+    return create_app(analyse.run, JsonReportWriter(), limits, allowed_hosts)
 
 
 def main() -> None:

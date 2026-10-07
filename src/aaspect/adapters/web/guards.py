@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from starlette.responses import Response
+from starlette.responses import PlainTextResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # Scripts and styles only from this server: report text comes from uploaded files, so an
@@ -32,6 +32,33 @@ class SecurityHeaders:
             await send(message)
 
         await self._app(scope, receive, send_with_headers if scope["type"] == "http" else send)
+
+
+class SameOriginPosts:
+    """Refuses POSTs sent by other websites.
+
+    The server usually runs on the user's own machine: without this, any page the user
+    visits could post uploads to it through an ordinary form.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["method"] == "POST" and _cross_site(scope):
+            await PlainTextResponse("Cross-site request refused.", 403)(scope, receive, send)
+            return
+        await self._app(scope, receive, send)
+
+
+def _cross_site(scope: Scope) -> bool:
+    headers = {name.decode("latin-1"): value.decode("latin-1") for name, value in scope["headers"]}
+    fetch_site = headers.get("sec-fetch-site")
+    if fetch_site is not None:
+        return fetch_site not in ("same-origin", "none")
+    origin = headers.get("origin")
+    # Browsers without Fetch Metadata still send Origin on cross-site form posts.
+    return origin is not None and origin.split("://", 1)[-1] != headers.get("host")
 
 
 class _TooLarge(Exception):

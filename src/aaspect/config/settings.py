@@ -12,6 +12,9 @@ _MIB = 2**20
 class Settings:
     # Loopback by default: exposing the server is a deliberate choice.
     host: str = "127.0.0.1"
+    # Comma-separated names the server may be addressed by; add the public name when
+    # binding to another interface.
+    allowed_hosts: str = "127.0.0.1,localhost"
     port: int = 8000
     max_upload_bytes: int = 512 * _MIB
     max_files: int = 2000
