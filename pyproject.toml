@@ -21,10 +21,10 @@ dependencies = [
 [dependency-groups]
 dev = [
   "coverage", # Measures test coverage and enforces minimum coverage in CI.
-  "httpx",    # Required by FastAPI's TestClient.
-  "pyright",  # Static type checker for Python.
-  "ruff",     # Formatter, linter, and import sorter.
-  "types-lxml>=2026.2.16",
+  "httpx2>=2.13.1",        # Required by Starlette's TestClient.
+  "pyright",               # Static type checker for Python.
+  "ruff",                  # Formatter, linter, and import sorter.
+  "types-lxml>=2026.2.16", # Type stubs for lxml, which ships none.
 ]
 
 [tool.hatch.build.targets.sdist]
