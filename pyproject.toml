@@ -26,6 +26,10 @@ dev = [
   "ruff",     # Formatter, linter, and import sorter.
 ]
 
+[tool.hatch.build.targets.sdist]
+# Hatch ignores .git/info/exclude, so locally excluded files would otherwise be packed.
+only-include = ["src", "tests", "README.md", "LICENSE"]
+
 [tool.coverage.run]
 branch = true              # Track branch coverage, not just line coverage.
 source = ["aaspect"]       # Measure coverage for the package only.
