@@ -41,7 +41,9 @@ class IsolatedSchemaValidator:
         self._timeout = timeout_seconds
         self._memory = memory_bytes
         factory()  # A broken schema must fail here, at startup, not inside a worker.
-        self._idle: queue.Queue[_Worker] = queue.Queue()
+        # An empty slot (None) is refilled on its next use, so a worker that fails to
+        # start costs that call, not the slot.
+        self._idle: queue.Queue[_Worker | None] = queue.Queue()
         for _ in range(workers):
             self._idle.put(self._start())
 
@@ -50,17 +52,38 @@ class IsolatedSchemaValidator:
     ) -> Sequence[SchemaViolation]:
         worker = self._idle.get()
         try:
-            outcome = worker.run(document, version, self._timeout)
+            worker = self._usable(worker)
+            try:
+                outcome = worker.run(document, version, self._timeout)
+            except _WorkerGone:
+                # It died while idle (e.g. killed by the system); the document is not
+                # to blame, so it gets one more try with a fresh worker.
+                worker = self._start()
+                outcome = worker.run(document, version, self._timeout)
+        except _WorkerGone:
+            outcome = _ABORTED
         finally:
-            self._idle.put(worker if worker.alive else self._start())
+            self._idle.put(worker if worker is not None and worker.alive else None)
         return outcome if isinstance(outcome, list) else [outcome]
 
     def close(self) -> None:
         while not self._idle.empty():
-            self._idle.get().stop()
+            worker = self._idle.get()
+            if worker is not None:
+                worker.stop()
+
+    def _usable(self, worker: "_Worker | None") -> "_Worker":
+        return worker if worker is not None and worker.alive else self._start()
 
     def _start(self) -> "_Worker":
         return _Worker(self._factory, self._memory)
+
+
+class _WorkerGone(Exception):
+    pass
+
+
+_ABORTED = unchecked("validation-aborted", "Validation aborted: the worker process stopped.")
 
 
 class _Worker:
@@ -79,6 +102,9 @@ class _Worker:
     ) -> list[SchemaViolation] | SchemaViolation:
         try:
             self._connection.send((document, version))
+        except (BrokenPipeError, ConnectionError, EOFError, OSError) as error:
+            self.stop()
+            raise _WorkerGone from error
         except BaseException:
             self.stop()
             raise

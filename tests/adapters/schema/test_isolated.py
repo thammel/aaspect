@@ -1,6 +1,7 @@
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from typing import NoReturn
 
 from aaspect.adapters.schema.isolated import IsolatedSchemaValidator
 from aaspect.adapters.schema.validator import OfficialSchemaValidator
@@ -64,6 +65,38 @@ class TestIsolatedSchemaValidator(unittest.TestCase):
     def test_broken_schema_fails_at_construction(self) -> None:
         with self.assertRaises(ValueError):
             IsolatedSchemaValidator(BrokenAtStartup, 1, 1, 1_000_000_000)
+
+
+class TestWorkerFailures(unittest.TestCase):
+    def setUp(self) -> None:
+        self.validator = IsolatedSchemaValidator(
+            Misbehaving, workers=1, timeout_seconds=5, memory_bytes=1_000_000_000
+        )
+
+    def tearDown(self) -> None:
+        self.validator.close()
+
+    def test_worker_killed_while_idle_is_replaced_and_document_retried(self) -> None:
+        [worker] = list(self.validator._idle.queue)
+        assert worker is not None
+        worker._process.kill()
+        worker._process.join()
+        [violation] = self.validator.validate(_document(b"{}", "x.json"), V3_2)
+        self.assertEqual(violation.message, "3.2:x.json")
+
+    def test_slot_survives_a_worker_that_cannot_start(self) -> None:
+        self.validator.validate(_document(b"crash"), V3_2)
+        start = self.validator._start
+
+        def fail_once() -> NoReturn:
+            self.validator._start = start
+            raise OSError("cannot spawn")
+
+        self.validator._start = fail_once
+        with self.assertRaises(OSError):
+            self.validator.validate(_document(b"{}"), V3_2)
+        [violation] = self.validator.validate(_document(b"{}", "y.json"), V3_2)
+        self.assertEqual(violation.message, "3.2:y.json")
 
 
 class TestSlowPatternInXml(unittest.TestCase):
