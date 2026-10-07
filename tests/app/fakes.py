@@ -1,3 +1,4 @@
+import time
 from collections.abc import Sequence
 
 from aaspect.domain.corpus import AasDocument, Corpus, Upload
@@ -25,6 +26,17 @@ class FakeValidator:
         self, document: AasDocument, version: MetamodelVersion
     ) -> Sequence[SchemaViolation]:
         return self.violations.get((document.label, version), ())
+
+
+class SlowerForEarlierDocuments(FakeValidator):
+    """Documents named `<n>.json` take longer the smaller n is, so a pool finishes them
+    in reverse order."""
+
+    def validate(
+        self, document: AasDocument, version: MetamodelVersion
+    ) -> Sequence[SchemaViolation]:
+        time.sleep(0.002 * (30 - int(document.source.split(".")[0])))
+        return super().validate(document, version)
 
 
 class BrokenValidator:

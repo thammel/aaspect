@@ -1,4 +1,5 @@
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from functools import partial
 
 from aaspect.domain.blocks import Finding, Location, Severity
@@ -18,17 +19,26 @@ type MapDocuments = Callable[
 ]
 
 
+@dataclass(frozen=True, slots=True)
+class SchemaCheckResult:
+    """The report section, and per document the version it was judged by: analyses that
+    work on the whole corpus (e.g. constraint checks) need those versions as data."""
+
+    section: Section
+    outcomes: tuple[tuple[AasDocument, VersionOutcome], ...] = ()
+
+
 def check_schema(
     corpus: Corpus,
     validator: SchemaValidator,
     requested: MetamodelVersion | None,
     map_documents: MapDocuments = map,
-) -> Section:
+) -> SchemaCheckResult:
     def outcome(document: AasDocument) -> VersionOutcome:
         return select_version(document, requested, partial(validator.validate, document))
 
-    labels = [document.label for document in corpus.documents]
-    outcomes = list(zip(labels, map_documents(outcome, corpus.documents), strict=True))
+    judged = tuple(zip(corpus.documents, map_documents(outcome, corpus.documents), strict=True))
+    outcomes = [(document.label, result) for document, result in judged]
     unreadable = tuple(
         Finding("unreadable-file", Severity.ERROR, failure.reason, (Location(file=failure.source),))
         for failure in corpus.failures
@@ -36,9 +46,10 @@ def check_schema(
     violations = group_violations(
         (file, outcome.version, outcome.violations) for file, outcome in outcomes
     )
-    return Section(
+    section = Section(
         key=SECTION_KEY,
         title=SECTION_TITLE,
         status=SectionStatus.COMPLETED,
         blocks=(*version_tables(outcomes), *unreadable, *violations),
     )
+    return SchemaCheckResult(section, judged)
