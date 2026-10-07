@@ -5,7 +5,10 @@ import zipfile
 
 from aaspect.adapters.files.aasx import ArchiveLimits
 
-LIMITS = ArchiveLimits(max_part_bytes=1_000_000, max_entries=50, max_compression_ratio=100)
+LIMITS = ArchiveLimits(
+    max_part_bytes=1_000_000, max_entries=50, max_compression_ratio=100, max_parts=5
+)
+BUDGET = 10_000_000
 ORIGIN = "http://admin-shell.io/aasx/relationships/aasx-origin"
 SPEC = "http://admin-shell.io/aasx/relationships/aas-spec"
 

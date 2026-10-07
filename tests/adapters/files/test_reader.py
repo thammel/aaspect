@@ -4,14 +4,14 @@ from aaspect.adapters.files.reader import FileCorpusReader
 from aaspect.domain.corpus import DocumentFormat, Upload
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.ports.corpus_reader import CorpusReader
-from tests.adapters.files.packages import LIMITS, aasx
+from tests.adapters.files.packages import BUDGET, LIMITS, aasx
 from tests.adapters.schema.samples import sample
 
 V3_0, V3_2 = MetamodelVersion.V3_0, MetamodelVersion.V3_2
 
 
 def _reader() -> CorpusReader:
-    return FileCorpusReader(LIMITS)
+    return FileCorpusReader(LIMITS, BUDGET)
 
 
 class TestFileCorpusReader(unittest.TestCase):
@@ -55,6 +55,21 @@ class TestFileCorpusReader(unittest.TestCase):
             ["empty.json", "image.aasx", "v2.xml", "nested.aasx"],
         )
         self.assertTrue(all(f.reason for f in corpus.failures))
+
+    def test_budget_spans_uploads(self) -> None:
+        reader = FileCorpusReader(LIMITS, max_document_bytes=5)
+        corpus = reader.read(
+            [Upload("a.json", b"{}"), Upload("b.json", b"{ }"), Upload("c.json", b"{}")]
+        )
+        self.assertEqual([d.source for d in corpus.documents], ["a.json", "b.json"])
+        [failure] = corpus.failures
+        self.assertEqual(failure.source, "c.json")
+        self.assertIn("total size limit", failure.reason)
+
+    def test_long_reasons_are_shortened(self) -> None:
+        namespace = "urn:" + "x" * 5000
+        corpus = _reader().read([Upload("a.xml", f'<e xmlns="{namespace}"/>'.encode())])
+        self.assertLessEqual(len(corpus.failures[0].reason), 300)
 
 
 if __name__ == "__main__":

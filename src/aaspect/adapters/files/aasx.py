@@ -38,15 +38,23 @@ _ZIP_ERRORS = (
 )
 
 
+BUDGET_EXHAUSTED = "Not read: the documents of this analysis reached their total size limit"
+
+
 @dataclass(frozen=True, slots=True)
 class ArchiveLimits:
     max_part_bytes: int
     max_entries: int
     max_compression_ratio: int
+    max_parts: int
 
 
-def aas_parts(content: bytes, limits: ArchiveLimits) -> list[tuple[str, bytes]]:
-    """Every AAS part of the package as (part name, content)."""
+def aas_parts(content: bytes, limits: ArchiveLimits, budget: int) -> list[tuple[str, bytes]]:
+    """Every AAS part of the package as (part name, content).
+
+    `budget` caps the bytes of all parts together: per-part limits alone would let a
+    small package list many parts, or the same part many times, and fill the memory.
+    """
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
             entries = _index(archive, limits)
@@ -55,10 +63,18 @@ def aas_parts(content: bytes, limits: ArchiveLimits) -> list[tuple[str, bytes]]:
                 posixpath.dirname(origin), "_rels", posixpath.basename(origin) + ".rels"
             )
             base = posixpath.dirname(origin)
-            parts = _targets(archive, entries, base, origin_rels, _SPEC_TYPES, limits)
+            targets = _targets(archive, entries, base, origin_rels, _SPEC_TYPES, limits)
+            parts = _distinct(targets)
             if not parts:
                 raise Unreadable("The AASX package contains no AAS part (aas-spec)")
-            return [(part, _read(archive, entries, part, limits)) for part in parts]
+            if len(parts) > limits.max_parts:
+                raise Unreadable(f"The package has more than {limits.max_parts} AAS parts")
+            read: list[tuple[str, bytes]] = []
+            for part in parts:
+                data = _read(archive, entries, part, limits, budget)
+                budget -= len(data)
+                read.append((part, data))
+            return read
     except _ZIP_ERRORS as error:
         raise Unreadable(f"Not a readable ZIP archive: {error}") from error
 
@@ -87,7 +103,7 @@ def _targets(
     limits: ArchiveLimits,
 ) -> list[str]:
     """Part names of the internal relationships of `types` listed in `rels_part`."""
-    rels = _read(archive, entries, rels_part, limits)
+    rels = _read(archive, entries, rels_part, limits, limits.max_part_bytes)
     parser = etree.XMLParser(
         resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False
     )
@@ -122,6 +138,17 @@ def _stays_inside(path: str) -> bool:
     return True
 
 
+def _distinct(parts: list[str]) -> list[str]:
+    """Each part once, in listed order: one part listed twice is one document, not two."""
+    seen: set[str] = set()
+    distinct = []
+    for part in parts:
+        if part.lower() not in seen:
+            seen.add(part.lower())
+            distinct.append(part)
+    return distinct
+
+
 def _single(origins: list[str]) -> str:
     if not origins:
         raise Unreadable("Not an AASX package: no aasx-origin relationship in _rels/.rels")
@@ -129,16 +156,22 @@ def _single(origins: list[str]) -> str:
 
 
 def _read(
-    archive: zipfile.ZipFile, entries: dict[str, zipfile.ZipInfo], part: str, limits: ArchiveLimits
+    archive: zipfile.ZipFile,
+    entries: dict[str, zipfile.ZipInfo],
+    part: str,
+    limits: ArchiveLimits,
+    budget: int,
 ) -> bytes:
     info = entries.get(part.lstrip("/").lower())
     if info is None:
         raise Unreadable(f"The package has no part {part[:100]}")
     # Read one byte past the limit instead of trusting the size in the ZIP header.
     with archive.open(info) as stream:
-        data = stream.read(limits.max_part_bytes + 1)
+        data = stream.read(min(limits.max_part_bytes, budget) + 1)
     if len(data) > limits.max_part_bytes:
         raise Unreadable(f"Part {part[:100]} is larger than {limits.max_part_bytes} bytes")
+    if len(data) > budget:
+        raise Unreadable(BUDGET_EXHAUSTED)
     if len(data) > limits.max_compression_ratio * max(info.compress_size, 1):
         raise Unreadable(f"Part {part[:100]} is compressed suspiciously well (ZIP bomb?)")
     return data
