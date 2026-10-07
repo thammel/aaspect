@@ -6,7 +6,7 @@ from aaspect.domain.blocks import Finding, Location, Severity
 from aaspect.domain.corpus import AasDocument, Corpus
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Section, SectionStatus
-from aaspect.domain.schema_check import group_violations
+from aaspect.domain.schema_check import SchemaViolation, group_violations
 from aaspect.domain.version_selection import VersionOutcome, select_version, version_tables
 from aaspect.ports.schema_validator import SchemaValidator
 
@@ -17,6 +17,15 @@ SECTION_TITLE = "Schema check"
 type MapDocuments = Callable[
     [Callable[[AasDocument], VersionOutcome], Iterable[AasDocument]], Iterable[VersionOutcome]
 ]
+
+
+_TIME_LIMIT = SchemaViolation(
+    "analysis-time-limit",
+    "",
+    "",
+    "Not checked: the analysis reached its time limit.",
+    file_level=True,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,9 +42,16 @@ def check_schema(
     validator: SchemaValidator,
     requested: MetamodelVersion | None,
     map_documents: MapDocuments = map,
+    expired: Callable[[], bool] = lambda: False,
 ) -> SchemaCheckResult:
+    """`expired` turns true once the analysis may take no more time; documents not yet
+    validated then are reported as not checked instead of keeping the workers busy."""
+
+    def validate(document: AasDocument, version: MetamodelVersion) -> list[SchemaViolation]:
+        return [_TIME_LIMIT] if expired() else list(validator.validate(document, version))
+
     def outcome(document: AasDocument) -> VersionOutcome:
-        return select_version(document, requested, partial(validator.validate, document))
+        return select_version(document, requested, partial(validate, document))
 
     judged = tuple(zip(corpus.documents, map_documents(outcome, corpus.documents), strict=True))
     outcomes = [(document.label, result) for document, result in judged]

@@ -29,6 +29,7 @@ class Settings:
     max_violations_per_document: int = 1000
     validation_workers: int = 8
     validation_timeout_seconds: int = 30
+    analysis_time_limit_seconds: int = 600
     worker_memory_bytes: int = 2048 * _MIB
 
 

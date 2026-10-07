@@ -23,6 +23,13 @@ class TestAnalyseCorpus(unittest.TestCase):
         self.assertEqual(section.status, SectionStatus.FAILED)
         self.assertEqual(section.reason, "RuntimeError: schema failed to load")
 
+    def test_time_limit_reaches_the_schema_check(self) -> None:
+        analyse = AnalyseCorpus(
+            FakeReader(CORPUS), FakeValidator({}), "0.1.0", time_limit_seconds=0
+        )
+        [section] = analyse.run(UPLOADS, None).sections
+        self.assertIn("analysis-time-limit", [getattr(b, "rule_id", "") for b in section.blocks])
+
 
 if __name__ == "__main__":
     unittest.main()

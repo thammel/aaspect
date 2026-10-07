@@ -51,6 +51,19 @@ class TestCheckSchema(unittest.TestCase):
             [(json_document, V3_2), (xml_document, V3_0)],
         )
 
+    def test_documents_after_the_time_limit_are_not_checked(self) -> None:
+        corpus = Corpus(
+            tuple(AasDocument(f"{i}.json", DocumentFormat.JSON, b"{}") for i in range(4))
+        )
+        checks = iter([False, False, True, True])
+        result = check_schema(corpus, FakeValidator({}), None, expired=lambda: next(checks))
+        self.assertEqual(
+            [(outcome.version, outcome.validated) for _, outcome in result.outcomes],
+            [(V3_2, True), (V3_2, True), (None, False), (None, False)],
+        )
+        [finding] = [b for b in result.section.blocks if isinstance(b, Finding)]
+        self.assertEqual((finding.rule_id, len(finding.locations)), ("analysis-time-limit", 2))
+
     def test_requested_version_applies_to_json(self) -> None:
         corpus = Corpus((AasDocument("a.json", DocumentFormat.JSON, b"{}"),))
         validator = FakeValidator({("a.json", V3_0): [VIOLATION]})

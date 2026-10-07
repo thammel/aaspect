@@ -40,7 +40,13 @@ def build_app(settings: Settings, resources: ExitStack) -> FastAPI:
         ),
         max_document_bytes=settings.max_document_bytes,
     )
-    analyse = AnalyseCorpus(reader, validator, version("aaspect"), pool.map)
+    analyse = AnalyseCorpus(
+        reader,
+        validator,
+        version("aaspect"),
+        pool.map,
+        time_limit_seconds=settings.analysis_time_limit_seconds,
+    )
     limits = WebLimits(
         max_upload_bytes=settings.max_upload_bytes,
         max_files=settings.max_files,
