@@ -4,23 +4,24 @@
 It is built on [neo4aas](https://github.com/rwth-iat/neo4aas), which maps AAS data into a
 Neo4j graph and checks it against the metamodel constraints.
 
-> **Status:** early stage. This repository contains the project structure only; the
-> features below are planned.
+> **Status:** early stage. The schema check works, with its web UI and JSON download
+> (see [Running](#running)); everything marked *planned* below is not built yet.
 
-## Planned features
+## Features
 
 Upload a set of AAS files (e.g. 100 AASX, JSON or XML files) in a web UI, start the
 analysis, view the results in the browser and download them as **JSON** or **PDF**.
+*Available: upload, report page, JSON download. Planned: PDF.*
 
 ### Compliance
 
-- **Schema check:** validate every file against the official AAS JSON and XML schemas
-  (metamodel V3.0, V3.1, V3.2) and group recurring schema violations.
-- **Metamodel constraints:** import the corpus into Neo4j with neo4aas and evaluate the
-  `AASd-xxx` constraints of the metamodel (IDTA-01001) with its constraint checker.
-  Violations are reported per constraint and per file.
+- **Schema check** *(available)*: validate every file against the official AAS JSON and
+  XML schemas (metamodel V3.0, V3.1, V3.2) and group recurring schema violations.
+- **Metamodel constraints** *(planned)*: import the corpus into Neo4j with neo4aas and
+  evaluate the `AASd-xxx` constraints of the metamodel (IDTA-01001) with its constraint
+  checker. Violations are reported per constraint and per file.
 
-### Analytics
+### Analytics *(planned)*
 
 - **Submodels:** which submodels are used, and how often. Split into IDTA-standardized
   and proprietary submodels.
@@ -32,14 +33,14 @@ analysis, view the results in the browser and download them as **JSON** or **PDF
 - **Metamodel attributes:** how often optional attributes are populated (`description`,
   `displayName`, `category`, `semanticId`, `qualifiers`, …).
 
-### Submodel template conformance
+### Submodel template conformance *(planned)*
 
 - Match each submodel to its IDTA submodel template by its semanticId.
 - Report missing mandatory elements, cardinality violations, wrong element or value
   types and elements that the template does not define.
 - Custom templates can be uploaded in addition to the IDTA templates.
 
-### Deployment
+### Deployment *(planned)*
 
 - Runs with Docker (`docker compose up`): the aaspect web app plus a Neo4j instance
   with APOC.
@@ -126,19 +127,27 @@ very slowly, and it has no user accounts. A report's link is its only protection
 
 Based on the [rwth-iat Python project template](https://github.com/rwth-iat/python-project-template).
 
+The code is layered so that the analysis rules never depend on a library, file format or
+server: `domain` depends on nothing, `ports` only on `domain`, and `app` and `adapters`
+only on those two. `main.py` alone wires the adapters to the use-cases.
+
 ```text
-.
-├── pyproject.toml
-├── README.md
-├── .gitignore
-├── LICENSE
-├── precommit.py
-├── src/
-│   └── aaspect/
-│       ├── __init__.py
-│       └── main.py
-└── tests/
-    └── test_main.py
+src/aaspect/
+├── domain/        Analysis rules and result types: report sections, findings, tables,
+│                  metamodel versions, version selection, grouping of violations.
+│                  Pure Python, no I/O.
+├── ports/         Interfaces the use-cases depend on: read uploads, validate a
+│                  document, write a report.
+├── app/           Use-cases: analyze a corpus, run the schema check.
+├── adapters/      Implementations of the ports, one package per outside concern:
+│   ├── files/         read JSON, XML and AASX uploads in memory, within limits
+│   ├── schema/        validate with jsonschema-rs and lxml in isolated worker
+│   │                  processes; official schemas under schemas/
+│   ├── report_json/   JSON report download
+│   └── web/           FastAPI + Jinja2 UI, templates/ and static/
+├── config/        Settings from AASPECT_* environment variables
+└── main.py        Composition root: builds the adapters and starts the server
+tests/             Mirrors src/aaspect/; tests/test_main.py drives the whole app over HTTP
 ```
 
 ---
