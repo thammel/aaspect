@@ -20,6 +20,7 @@ type Analyse = Callable[[Sequence[Upload], MetamodelVersion | None], Report]
 _MAX_ROWS = 200
 _MAX_LOCATIONS = 20
 _EXPIRED = "This report does not exist or has expired."
+_BUSY = "AASpect is busy with other analyses. Please try again in a moment."
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,20 +67,25 @@ class _Handlers:
         self._pages = pages
         self._max_files = limits.max_files
         self._store = ReportStore(limits.max_stored_reports)
-        # Each analysis holds its uploads in memory; queue instead of running them all.
-        self._gate = threading.BoundedSemaphore(limits.max_concurrent_analyses)
+        # Each analysis holds its uploads in memory, so the slot is taken before reading
+        # them. Waiting requests would hold their uploads, and threads, all the same.
+        self._slots = threading.BoundedSemaphore(limits.max_concurrent_analyses)
 
     def upload_form(self) -> Response:
         versions = [AUTO, *(version.value for version in NEWEST_FIRST)]
         return self._pages.render("upload.html", versions=versions)
 
     async def start_analysis(self, request: Request) -> Response:
+        if not self._slots.acquire(blocking=False):
+            return self._pages.error(503, _BUSY)
         try:
             uploads, version = await read_form(request, self._max_files)
+            # Validation is CPU-bound; on the event loop it would block every request.
+            report = await run_in_threadpool(self._analyse, uploads, version)
         except UploadRejected as rejected:
             return self._pages.error(rejected.status, rejected.message)
-        # Validation is CPU-bound; running it on the event loop would block every request.
-        report = await run_in_threadpool(self._analyse_gated, uploads, version)
+        finally:
+            self._slots.release()
         return RedirectResponse(f"/reports/{self._store.add(report)}", status_code=303)
 
     def show_report(self, key: str) -> Response:
@@ -99,7 +105,3 @@ class _Handlers:
             media_type=self._writer.media_type,
             headers={"content-disposition": 'attachment; filename="aaspect-report.json"'},
         )
-
-    def _analyse_gated(self, uploads: list[Upload], version: MetamodelVersion | None) -> Report:
-        with self._gate:
-            return self._analyse(uploads, version)

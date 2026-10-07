@@ -1,4 +1,5 @@
 import json
+import threading
 import unittest
 from collections.abc import Iterator, Sequence
 
@@ -105,6 +106,29 @@ class TestRoutes(unittest.TestCase):
         locations = [self._upload(_files("a.json")).headers["location"] for _ in range(3)]
         self.assertEqual(self.client.get(locations[0]).status_code, 404)
         self.assertEqual(self.client.get(locations[2]).status_code, 200)
+
+    def test_busy_server_answers_503_before_reading_uploads(self) -> None:
+        started, release = threading.Event(), threading.Event()
+
+        def slow(uploads: Sequence[Upload], version: MetamodelVersion | None) -> Report:
+            started.set()
+            release.wait(10)
+            return full_report()
+
+        client = TestClient(create_app(slow, JsonReportWriter(), LIMITS))
+        first = threading.Thread(target=lambda: client.post("/analyses", files=_files("a.json")))
+        first.start()
+        self.assertTrue(started.wait(10))
+        busy = client.post("/analyses", files=_files("b.json"))
+        self.assertEqual(busy.status_code, 503)
+        self.assertEqual(client.get("/").status_code, 200)
+        release.set()
+        first.join(10)
+
+    def test_slot_is_released_after_rejection_and_success(self) -> None:
+        for _ in range(3):
+            self.assertEqual(self._upload(_files("a.json"), "4.0").status_code, 400)
+            self.assertEqual(self._upload(_files("a.json")).status_code, 303)
 
     def test_upload_script_is_served(self) -> None:
         response = self.client.get("/static/upload.js")
