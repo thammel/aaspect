@@ -34,13 +34,13 @@ async def read_form(
     except HTTPException as error:
         # Starlette reports multipart limits (too many files, oversized field) this way.
         raise UploadRejected(400, str(error.detail)) from error
-    uploads = [
-        Upload(name, content)
-        for name, (_, content) in zip(unique_names([n for n, _ in contents]), contents, strict=True)
-        if content
-    ]
+    # A file input left empty still sends one part, without a name or content. A named
+    # empty file is kept, so the report lists it as unreadable instead of losing it.
+    chosen = [(name, content) for name, content in contents if name or content]
+    names = unique_names([name for name, _ in chosen])
+    uploads = [Upload(name, content) for name, (_, content) in zip(names, chosen, strict=True)]
     if not uploads:
-        raise UploadRejected(400, "Choose at least one non-empty file.")
+        raise UploadRejected(400, "Choose at least one file.")
     return uploads, version
 
 

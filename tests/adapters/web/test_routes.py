@@ -64,6 +64,10 @@ class TestRoutes(unittest.TestCase):
         self.assertIn("attachment", download.headers["content-disposition"])
         self.assertEqual(json.loads(download.content)["format_version"], "1")
 
+    def test_named_empty_file_reaches_the_analysis(self) -> None:
+        self._upload(_files("empty.json", content=b"") + _files("", content=b""))
+        self.assertEqual(self.analyse.calls, [(["empty.json"], None)])
+
     def test_auto_means_no_version(self) -> None:
         self._upload(_files("a.json"))
         self.assertIsNone(self.analyse.calls[0][1])
@@ -72,7 +76,7 @@ class TestRoutes(unittest.TestCase):
         cases = {
             "unknown version": (_files("a.json"), "4.0"),
             "no files": ([], "auto"),
-            "only empty files": (_files("a.json", content=b""), "auto"),
+            "no file chosen": (_files("", content=b""), "auto"),
             "too many files": (_files("1", "2", "3", "4"), "auto"),
         }
         for name, (files, version) in cases.items():
