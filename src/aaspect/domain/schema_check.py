@@ -10,7 +10,7 @@ from aaspect.domain.metamodel import MetamodelVersion
 @dataclass(frozen=True, slots=True)
 class SchemaViolation:
     keyword: str
-    schema_path: str
+    rule_path: str
     instance_path: str
     message: str
     # The document as a whole could not be checked (malformed, timed out, ...). Such a
@@ -23,14 +23,14 @@ def group_violations(
 ) -> tuple[Finding, ...]:
     """One finding per broken schema rule, most frequent first.
 
-    Grouped by schema path, never by message: a message can quote the whole failing
-    element, so the same rule would split into one group per occurrence.
+    Grouped by rule path (where the broken rule sits), never by message: a message can
+    quote the whole failing element, so one rule would split into a group per occurrence.
     """
     locations: dict[tuple[str, str, str], list[Location]] = {}
     first_message: dict[tuple[str, str, str], str] = {}
     for file, version, violations in results:
         for violation in violations:
-            key = (version.value if version else "", violation.keyword, violation.schema_path)
+            key = (version.value if version else "", violation.keyword, violation.rule_path)
             first_message.setdefault(key, violation.message)
             locations.setdefault(key, []).append(
                 Location(file=file, element_path=violation.instance_path)
@@ -40,11 +40,11 @@ def group_violations(
 
 
 def _finding(
-    version: str, keyword: str, schema_path: str, example: str, locations: list[Location]
+    version: str, keyword: str, rule_path: str, example: str, locations: list[Location]
 ) -> Finding:
     # One finding stands for many occurrences; its text quotes only the first of them.
     message = (
-        f"Violates {schema_path} (schema {version}). Example: {example}" if schema_path else example
+        f"Violates {rule_path} (schema {version}). Example: {example}" if rule_path else example
     )
     return Finding(
         rule_id=keyword, severity=Severity.ERROR, message=message, locations=tuple(locations)

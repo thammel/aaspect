@@ -40,7 +40,7 @@ class TestViolations(unittest.TestCase):
         del document["submodels"][0]["id"]
         [violation] = _validate(json.dumps(document).encode())
         self.assertEqual(violation.keyword, "required")
-        self.assertEqual(violation.schema_path, "/definitions/Identifiable/allOf/1/required")
+        self.assertEqual(violation.rule_path, "/definitions/Identifiable/allOf/1/required")
         self.assertEqual(violation.instance_path, "/submodels/0")
 
     def test_long_message_is_truncated(self) -> None:

@@ -37,16 +37,20 @@ def _safe_parser() -> etree.XMLParser:
 
 
 def _from_entry(root: etree._Element, entry: etree._LogEntry) -> SchemaViolation:
-    """libxml2 only gives positional paths such as `/*/*[7]`. Grouping needs element names,
-    so the path is rebuilt from the element it points at."""
+    """libxml2 names no schema rule and only gives positional paths such as `/*/*[7]`.
+
+    The rule is approximated by the element and its parent (`property/valueType`): the
+    same XSD declaration applies at every nesting depth, so grouping by the full path
+    would split one rule into a finding per depth.
+    """
     element = _resolve(root, entry.path)
     if element is None:
-        instance_path = generic_path = entry.path or ""
+        instance_path = rule_path = entry.path or ""
     else:
-        instance_path, generic_path = _named_paths(element)
+        instance_path, rule_path = _element_path(element), _rule_path(element)
     return violation(
         keyword=entry.type_name,
-        schema_path=generic_path,
+        rule_path=rule_path,
         instance_path=instance_path,
         message=entry.message,
     )
@@ -67,14 +71,18 @@ def _resolve(root: etree._Element, path: str | None) -> etree._Element | None:
     return None
 
 
-def _named_paths(element: etree._Element) -> tuple[str, str]:
-    """`/environment/submodels/submodel[2]/id`, and the same without positions."""
+def _element_path(element: etree._Element) -> str:
+    """`/environment/submodels/submodel[2]/id`: positions only where names repeat."""
     indexed: list[str] = []
-    generic: list[str] = []
     for node in [element, *element.iterancestors()]:
         name = etree.QName(node).localname
-        generic.append(name)
         parent = node.getparent()
         siblings = [] if parent is None else [child for child in parent if child.tag == node.tag]
         indexed.append(f"{name}[{siblings.index(node) + 1}]" if len(siblings) > 1 else name)
-    return "/" + "/".join(reversed(indexed)), "/" + "/".join(reversed(generic))
+    return "/" + "/".join(reversed(indexed))
+
+
+def _rule_path(element: etree._Element) -> str:
+    parent = element.getparent()
+    names = [etree.QName(node).localname for node in (parent, element) if node is not None]
+    return "/".join(names)

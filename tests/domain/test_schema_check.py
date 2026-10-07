@@ -8,8 +8,8 @@ V3_2 = MetamodelVersion.V3_2
 V3_0 = MetamodelVersion.V3_0
 
 
-def _violation(keyword: str, schema_path: str, instance_path: str = "/x", message: str = "m"):
-    return SchemaViolation(keyword, schema_path, instance_path, message)
+def _violation(keyword: str, rule_path: str, instance_path: str = "/x", message: str = "m"):
+    return SchemaViolation(keyword, rule_path, instance_path, message)
 
 
 class TestGroupViolations(unittest.TestCase):
@@ -29,7 +29,7 @@ class TestGroupViolations(unittest.TestCase):
         self.assertIn("/$defs/Property/required", finding.message)
         self.assertIn("'{huge element}' is bad", finding.message)
 
-    def test_separates_versions_and_schema_paths(self) -> None:
+    def test_separates_versions_and_rule_paths(self) -> None:
         violation = _violation("required", "/p")
         findings = group_violations(
             [

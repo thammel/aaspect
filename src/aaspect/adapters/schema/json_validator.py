@@ -34,7 +34,7 @@ def _from_error(error: jsonschema_rs.ValidationError) -> SchemaViolation:
     keyword = error.schema_path[-1] if error.schema_path else type(error.kind).__name__
     return violation(
         keyword=str(keyword),
-        schema_path=_pointer(error.schema_path),
+        rule_path=_pointer(error.schema_path),
         instance_path=_pointer(error.instance_path),
         message=error.message,
     )

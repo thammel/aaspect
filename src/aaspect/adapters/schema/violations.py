@@ -7,10 +7,10 @@ from aaspect.domain.schema_check import SchemaViolation
 _MAX_LENGTH = 300
 
 
-def violation(keyword: str, schema_path: str, instance_path: str, message: str) -> SchemaViolation:
+def violation(keyword: str, rule_path: str, instance_path: str, message: str) -> SchemaViolation:
     return SchemaViolation(
         keyword=keyword,
-        schema_path=_truncate(schema_path),
+        rule_path=_truncate(rule_path),
         instance_path=_truncate(instance_path),
         message=_truncate(message),
     )

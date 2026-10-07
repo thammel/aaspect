@@ -50,7 +50,7 @@ class TestModelTypeDispatch(unittest.TestCase):
     def test_reports_the_named_type_only(self) -> None:
         [violation] = _validate({"modelType": "A", "a": 1})
         self.assertEqual(violation.keyword, "type")
-        self.assertEqual(violation.schema_path, "/definitions/A/allOf/1/properties/a/type")
+        self.assertEqual(violation.rule_path, "/definitions/A/allOf/1/properties/a/type")
 
     def test_valid_elements_stay_valid(self) -> None:
         self.assertEqual(_validate({"modelType": "A", "a": "x"}), [])

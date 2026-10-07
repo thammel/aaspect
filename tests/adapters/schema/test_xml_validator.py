@@ -52,7 +52,7 @@ class TestViolations(unittest.TestCase):
 
         [violation] = _validate(_edited(drop_id))
         self.assertEqual(violation.keyword, "SCHEMAV_ELEMENT_CONTENT")
-        self.assertEqual(violation.schema_path, "/environment/submodels/submodel/kind")
+        self.assertEqual(violation.rule_path, "submodel/kind")
         self.assertEqual(violation.instance_path, "/environment/submodels/submodel/kind")
 
     def test_repeated_elements_get_positions(self) -> None:
@@ -64,7 +64,24 @@ class TestViolations(unittest.TestCase):
 
         [violation] = _validate(_edited(duplicate_and_break))
         self.assertEqual(violation.instance_path, "/environment/submodels/submodel[2]/kind")
-        self.assertEqual(violation.schema_path, "/environment/submodels/submodel/kind")
+        self.assertEqual(violation.rule_path, "submodel/kind")
+
+    def test_same_rule_at_any_depth_has_one_rule_path(self) -> None:
+        def bad_id_short(level: int) -> bytes:
+            return (
+                b"<property><idShort>bad id " + str(level).encode() + b"</idShort>"
+                b"<valueType>xs:string</valueType></property>"
+            )
+
+        content = (
+            b'<environment xmlns="https://admin-shell.io/aas/3/2"><submodels><submodel>'
+            b"<id>s</id><submodelElements>" + bad_id_short(0) + b"<submodelElementCollection>"
+            b"<idShort>group</idShort><value>" + bad_id_short(1) + b"</value>"
+            b"</submodelElementCollection></submodelElements></submodel></submodels></environment>"
+        )
+        patterns = [v for v in _validate(content) if v.keyword == "SCHEMAV_CVC_PATTERN_VALID"]
+        self.assertEqual([v.rule_path for v in patterns], ["property/idShort"] * 2)
+        self.assertNotEqual(patterns[0].instance_path, patterns[1].instance_path)
 
     def test_prefixed_namespace(self) -> None:
         content = (
