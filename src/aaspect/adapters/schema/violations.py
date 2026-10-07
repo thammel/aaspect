@@ -13,5 +13,10 @@ def violation(keyword: str, schema_path: str, instance_path: str, message: str) 
     )
 
 
+def unchecked(keyword: str, message: str) -> SchemaViolation:
+    """The document as a whole could not be checked; no rule or element is involved."""
+    return SchemaViolation(keyword, "", "", _truncate(message), file_level=True)
+
+
 def _truncate(text: str) -> str:
     return text if len(text) <= _MAX_LENGTH else text[: _MAX_LENGTH - 1] + "…"

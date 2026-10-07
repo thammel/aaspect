@@ -37,7 +37,8 @@ class TestIsolatedSchemaValidator(unittest.TestCase):
 
     def test_timeout_becomes_violation_and_worker_is_replaced(self) -> None:
         started = time.perf_counter()
-        self.assertEqual(self._keywords(b"slow"), ["validation-timeout"])
+        [violation] = self.validator.validate(_document(b"slow"), V3_2)
+        self.assertEqual((violation.keyword, violation.file_level), ("validation-timeout", True))
         self.assertLess(time.perf_counter() - started, 10)
         self.assertEqual(self._keywords(b"{}"), ["type"])
 

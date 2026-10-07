@@ -13,7 +13,7 @@ from collections.abc import Callable, Sequence
 from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 
-from aaspect.adapters.schema.violations import violation
+from aaspect.adapters.schema.violations import unchecked
 from aaspect.domain.corpus import AasDocument
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.schema_check import SchemaViolation
@@ -84,10 +84,8 @@ class _Worker:
             raise
         if not self._connection.poll(timeout):
             self.stop()
-            return violation(
+            return unchecked(
                 "validation-timeout",
-                "",
-                "",
                 f"Validation stopped after {timeout:g} s. Some values (e.g. very long ones "
                 "that fail a pattern) make the schema check extremely slow.",
             )
@@ -95,15 +93,13 @@ class _Worker:
             kind, payload = self._connection.recv()
         except (EOFError, OSError):
             self.stop()
-            return violation(
+            return unchecked(
                 "validation-aborted",
-                "",
-                "",
                 f"Validation aborted: it needed more than {self._memory // 2**20} MB "
                 "of memory or crashed.",
             )
         if kind == "error":
-            return violation("validation-error", "", "", f"Validation failed: {payload}")
+            return unchecked("validation-error", f"Validation failed: {payload}")
         return payload
 
     def stop(self) -> None:

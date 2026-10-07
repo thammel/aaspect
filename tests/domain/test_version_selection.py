@@ -65,6 +65,40 @@ class TestSelectVersion(unittest.TestCase):
         self.assertEqual(outcome.version, V3_1)
 
 
+UNCHECKED = (SchemaViolation("validation-timeout", "", "", "stopped", file_level=True),)
+
+
+class _Unchecked:
+    """Every version fails at file level, as a timeout or a malformed file would."""
+
+    def __init__(self) -> None:
+        self.tried: list[MetamodelVersion] = []
+
+    def __call__(self, version: MetamodelVersion) -> Sequence[SchemaViolation]:
+        self.tried.append(version)
+        return UNCHECKED
+
+
+class TestFileLevelViolations(unittest.TestCase):
+    def test_auto_stops_and_leaves_version_undetermined(self) -> None:
+        validate = _Unchecked()
+        outcome = select_version(JSON, None, validate)
+        self.assertEqual(validate.tried, [V3_2])
+        self.assertIsNone(outcome.version)
+        self.assertFalse(outcome.validated)
+        self.assertEqual(outcome.violations, UNCHECKED)
+
+    def test_declared_version_is_kept(self) -> None:
+        outcome = select_version(XML, None, _Unchecked())
+        self.assertEqual((outcome.version, outcome.validated), (V3_0, False))
+
+    def test_tables_show_not_validated(self) -> None:
+        outcome = VersionOutcome(None, VersionBasis.AUTO, UNCHECKED)
+        distribution, per_file = version_tables([("a.json", outcome)])
+        self.assertEqual(distribution.rows, (("not determined", 1),))
+        self.assertEqual(per_file.rows, (("a.json", "not determined", "not validated", "no"),))
+
+
 class TestVersionTables(unittest.TestCase):
     def test_distribution_and_per_file(self) -> None:
         results = [

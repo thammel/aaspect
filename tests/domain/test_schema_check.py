@@ -45,6 +45,16 @@ class TestGroupViolations(unittest.TestCase):
         findings = group_violations([("a.json", V3_2, [rare, common, common])])
         self.assertEqual([finding.rule_id for finding in findings], ["type", "pattern"])
 
+    def test_file_level_message_has_no_rule_path(self) -> None:
+        unchecked = SchemaViolation("well-formedness", "", "", "Not well-formed JSON", True)
+        [finding] = group_violations([("a.json", None, [unchecked]), ("b.json", None, [unchecked])])
+        self.assertEqual(finding.message, "Not well-formed JSON")
+        self.assertEqual(len(finding.locations), 2)
+
+    def test_message_marks_the_quote_as_example(self) -> None:
+        [finding] = group_violations([("a.json", V3_2, [_violation("type", "/p", message="m")])])
+        self.assertEqual(finding.message, "Violates /p (schema 3.2). Example: m")
+
     def test_no_violations_no_findings(self) -> None:
         self.assertEqual(group_violations([("a.json", V3_2, [])]), ())
 

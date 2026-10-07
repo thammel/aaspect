@@ -73,6 +73,7 @@ class TestMalformedInput(unittest.TestCase):
             with self.subTest(content=content[:10]):
                 [violation] = _validate(content)
                 self.assertEqual(violation.keyword, "well-formedness")
+                self.assertTrue(violation.file_level)
 
     def test_byte_order_mark_is_accepted(self) -> None:
         self.assertEqual(_validate(b"\xef\xbb\xbf" + sample(V3_2, "submodel.json")), [])

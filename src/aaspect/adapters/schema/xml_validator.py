@@ -2,7 +2,7 @@ import threading
 
 from lxml import etree
 
-from aaspect.adapters.schema.violations import violation
+from aaspect.adapters.schema.violations import unchecked, violation
 from aaspect.domain.schema_check import SchemaViolation
 
 
@@ -17,14 +17,14 @@ class XmlSchemaValidator:
         try:
             root = etree.fromstring(content, _safe_parser())
         except etree.XMLSyntaxError as error:
-            return [violation("well-formedness", "", "", f"Not well-formed XML: {error}")]
+            return [unchecked("well-formedness", f"Not well-formed XML: {error}")]
         with self._lock:
             try:
                 if self._schema.validate(root):
                     return []
             except etree.XMLSchemaValidateError as error:
                 # Raised e.g. for entity references left unexpanded by the safe parser.
-                return [violation("unvalidatable", "", "", f"Schema validation aborted: {error}")]
+                return [unchecked("unvalidatable", f"Schema validation aborted: {error}")]
             entries = list(self._schema.error_log)
         return [_from_entry(root, entry) for entry in entries]
 
