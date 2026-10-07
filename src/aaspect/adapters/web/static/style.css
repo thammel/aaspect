@@ -22,6 +22,7 @@ form { display: grid; gap: 0.5rem; max-width: 32rem; }
 label { font-weight: 600; margin-top: 0.75rem; }
 button { justify-self: start; margin-top: 1rem; padding: 0.5rem 1.25rem; }
 .hint, .more, .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
+.selection { font-weight: 600; margin: 0.5rem 0 0; }
 
 section { margin-top: 2rem; }
 .status { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 1rem; background: var(--surface); }

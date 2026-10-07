@@ -27,6 +27,9 @@ class TestTemplates(unittest.TestCase):
         html = _html("upload.html", versions=["auto", "3.2"])
         self.assertIn('name="files"', html)
         self.assertIn("100 files and 512 MB", html)
+        self.assertIn("webkitdirectory", html)
+        self.assertIn('data-max-bytes="536870912"', html)
+        self.assertIn('<script src="/static/upload.js" defer></script>', html)
 
     def test_report_renders_every_block_and_status(self) -> None:
         html = _html("report.html", report=full_report(), key="k", max_rows=200, max_locations=20)

@@ -6,13 +6,24 @@ from tests.adapters.web.reports import full_report
 
 
 class TestUniqueNames(unittest.TestCase):
-    def test_names(self) -> None:
+    def test_repeats_are_numbered(self) -> None:
+        self.assertEqual(
+            unique_names(["a.json", "a.json", "a.json (2)"]),
+            ["a.json", "a.json (2)", "a.json (2) (2)"],
+        )
+
+    def test_folder_paths_are_kept_but_cleaned(self) -> None:
         self.assertEqual(
             unique_names(
-                ["a.json", "a.json", "a.json (2)", "C:\\x\\b.xml", "../../c", "", "y" * 300]
+                ["WAGO/sub/a.json", "WAGO/other/a.json", "x\\y\\b.xml", "/../../etc/./c", "", ".."]
             ),
-            ["a.json", "a.json (2)", "a.json (2) (2)", "b.xml", "c", "upload", "y" * 200],
+            ["WAGO/sub/a.json", "WAGO/other/a.json", "x/y/b.xml", "etc/c", "upload", "upload (2)"],
         )
+
+    def test_long_names_keep_their_end(self) -> None:
+        [name] = unique_names(["folder/" * 50 + "file.json"])
+        self.assertEqual(len(name), 200)
+        self.assertTrue(name.endswith("/file.json"))
 
 
 class TestReportStore(unittest.TestCase):

@@ -51,7 +51,7 @@ class TestRoutes(unittest.TestCase):
         response = self._upload(_files("a.json", "a.json", "dir/b.xml"), "3.1")
         self.assertEqual(response.status_code, 303)
         self.assertEqual(
-            self.analyse.calls, [(["a.json", "a.json (2)", "b.xml"], MetamodelVersion.V3_1)]
+            self.analyse.calls, [(["a.json", "a.json (2)", "dir/b.xml"], MetamodelVersion.V3_1)]
         )
         page = self.client.get(response.headers["location"])
         self.assertEqual(page.status_code, 200)
@@ -105,6 +105,11 @@ class TestRoutes(unittest.TestCase):
         locations = [self._upload(_files("a.json")).headers["location"] for _ in range(3)]
         self.assertEqual(self.client.get(locations[0]).status_code, 404)
         self.assertEqual(self.client.get(locations[2]).status_code, 200)
+
+    def test_upload_script_is_served(self) -> None:
+        response = self.client.get("/static/upload.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("javascript", response.headers["content-type"])
 
     def test_no_api_docs(self) -> None:
         for path in ("/docs", "/openapi.json"):

@@ -45,11 +45,14 @@ async def read_form(
 
 
 def unique_names(names: list[str]) -> list[str]:
-    """Display names: base name only, shortened, and numbered when they repeat."""
+    """Display names: the path inside a chosen folder, cleaned, shortened, and numbered
+    when they repeat. They are only labels; nothing is ever opened by this name."""
     used: set[str] = set()
     unique = []
     for raw in names:
-        base = raw.replace("\\", "/").rsplit("/", 1)[-1][:_MAX_NAME_LENGTH] or "upload"
+        segments = [s for s in raw.replace("\\", "/").split("/") if s not in ("", ".", "..")]
+        # Shortened from the front: the file name matters more than the folders above it.
+        base = "/".join(segments)[-_MAX_NAME_LENGTH:] or "upload"
         name, count = base, 1
         while name in used:
             count += 1

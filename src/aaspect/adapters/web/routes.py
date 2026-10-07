@@ -35,6 +35,7 @@ class Pages:
         self._environment = environment
         self._limits = {
             "max_upload_mb": limits.max_upload_bytes // 2**20,
+            "max_upload_bytes": limits.max_upload_bytes,
             "max_files": limits.max_files,
         }
 
