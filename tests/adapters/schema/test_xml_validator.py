@@ -64,6 +64,25 @@ class TestViolations(unittest.TestCase):
         self.assertEqual(violation.instance_path, "/environment/submodels/submodel[2]/kind")
         self.assertEqual(violation.schema_path, "/environment/submodels/submodel/kind")
 
+    def test_prefixed_namespace(self) -> None:
+        content = (
+            b'<aas:environment xmlns:aas="https://admin-shell.io/aas/3/2"><aas:submodels>'
+            b"<aas:submodel><aas:kind>Instance</aas:kind></aas:submodel>"
+            b"</aas:submodels></aas:environment>"
+        )
+        [violation] = _validate(content)
+        self.assertEqual(violation.instance_path, "/environment/submodels/submodel/kind")
+
+    def test_prefix_declared_below_root_falls_back_to_raw_path(self) -> None:
+        content = (
+            b'<environment xmlns="https://admin-shell.io/aas/3/2"><submodels>'
+            b'<x:submodel xmlns:x="https://admin-shell.io/aas/3/2"><x:kind>Instance</x:kind>'
+            b"</x:submodel></submodels></environment>"
+        )
+        [violation] = _validate(content)
+        self.assertEqual(violation.keyword, "SCHEMAV_ELEMENT_CONTENT")
+        self.assertTrue(violation.instance_path)
+
 
 class TestCharacters(unittest.TestCase):
     def test_characters_outside_bmp_are_valid(self) -> None:

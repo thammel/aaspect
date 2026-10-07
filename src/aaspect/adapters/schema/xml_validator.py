@@ -54,7 +54,13 @@ def _from_entry(root: etree._Element, entry: etree._LogEntry) -> SchemaViolation
 def _resolve(root: etree._Element, path: str | None) -> etree._Element | None:
     if not path:
         return None
-    found = root.getroottree().xpath(path)
+    # libxml2 writes the document's own prefixes into the path (`/aas:environment/...`).
+    prefixes = {prefix: uri for prefix, uri in root.nsmap.items() if prefix}
+    try:
+        found = root.getroottree().xpath(path, namespaces=prefixes)
+    except etree.XPathError:
+        # E.g. a prefix declared below the root; the raw path is still reported.
+        return None
     if isinstance(found, list) and found and isinstance(found[0], etree._Element):
         return found[0]
     return None
