@@ -26,6 +26,7 @@ class Settings:
     max_aas_parts: int = 100
     # All documents of one analysis together, including parts unpacked from packages.
     max_document_bytes: int = 1024 * _MIB
+    max_violations_per_document: int = 1000
     validation_workers: int = 8
     validation_timeout_seconds: int = 30
     worker_memory_bytes: int = 2048 * _MIB

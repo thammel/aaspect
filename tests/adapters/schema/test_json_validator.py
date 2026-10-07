@@ -50,6 +50,20 @@ class TestViolations(unittest.TestCase):
         self.assertTrue(violation.message.endswith("…"))
 
 
+class TestViolationCap(unittest.TestCase):
+    def test_cap_and_note(self) -> None:
+        validator = JsonSchemaValidator({"items": {"type": "string"}}, max_violations=5)
+        violations = validator.validate(json.dumps(list(range(100))).encode())
+        self.assertEqual(len(violations), 6)
+        self.assertEqual(violations[-1].keyword, "violations-truncated")
+        self.assertFalse(violations[-1].file_level)
+
+    def test_no_note_at_the_limit(self) -> None:
+        validator = JsonSchemaValidator({"items": {"type": "string"}}, max_violations=5)
+        violations = validator.validate(json.dumps(list(range(5))).encode())
+        self.assertEqual([v.keyword for v in violations], ["type"] * 5)
+
+
 class TestCharacters(unittest.TestCase):
     def test_characters_outside_bmp_are_valid(self) -> None:
         for text in ("Grüße 😀", "𠀀 CJK Extension B", "tab\tand\nnewline"):
@@ -84,12 +98,12 @@ class TestPatternRewrite(unittest.TestCase):
         # Built from pieces so no tool turns the escaped pair into a literal emoji.
         pair = "\\u" + "d83d" + "\\u" + "de00"
         with self.assertRaises(ValueError):
-            JsonSchemaValidator({"type": "string", "pattern": f"^{pair}$"})
+            JsonSchemaValidator({"type": "string", "pattern": f"^{pair}$"}, 1000)
 
     def test_rewrite_reaches_nested_patterns(self) -> None:
         pairs = r"\ud800[\udc00-\udfff]|[\ud801-\udbfe][\udc00-\udfff]|\udbff[\udc00-\udfff]"
         schema = {"type": "array", "items": {"type": "string", "pattern": f"^({pairs})*$"}}
-        validator = JsonSchemaValidator(schema)
+        validator = JsonSchemaValidator(schema, 1000)
         self.assertEqual(validator.validate(json.dumps(["😀"]).encode()), [])
 
 

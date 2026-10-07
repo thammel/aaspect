@@ -13,16 +13,18 @@ class OfficialSchemaValidator:
     """Validates against the official schemas copied into `schemas/`.
 
     All schemas are compiled up front, so a broken schema fails at startup, not on the
-    first upload.
+    first upload. At most `max_violations` are listed per document and version.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_violations: int = 1000) -> None:
         self._json = {
-            version: JsonSchemaValidator(json.loads(_schema_file(version, "aas.json")))
+            version: JsonSchemaValidator(
+                json.loads(_schema_file(version, "aas.json")), max_violations
+            )
             for version in MetamodelVersion
         }
         self._xml = {
-            version: XmlSchemaValidator(_schema_file(version, "AAS.xsd"))
+            version: XmlSchemaValidator(_schema_file(version, "AAS.xsd"), max_violations)
             for version in MetamodelVersion
         }
 

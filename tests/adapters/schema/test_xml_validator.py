@@ -3,6 +3,8 @@ from collections.abc import Callable
 
 from lxml import etree
 
+from aaspect.adapters.schema.validator import _schema_file
+from aaspect.adapters.schema.xml_validator import XmlSchemaValidator
 from aaspect.domain.corpus import AasDocument, DocumentFormat
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.schema_check import SchemaViolation
@@ -82,6 +84,22 @@ class TestViolations(unittest.TestCase):
         [violation] = _validate(content)
         self.assertEqual(violation.keyword, "SCHEMAV_ELEMENT_CONTENT")
         self.assertTrue(violation.instance_path)
+
+
+class TestViolationCap(unittest.TestCase):
+    def test_cap_and_note(self) -> None:
+        validator = XmlSchemaValidator(_schema_file(V3_2, "AAS.xsd"), max_violations=2)
+        submodels = b"<submodel><kind>Instance</kind></submodel>" * 10
+        content = (
+            b'<environment xmlns="https://admin-shell.io/aas/3/2"><submodels>'
+            + submodels
+            + b"</submodels></environment>"
+        )
+        violations = validator.validate(content)
+        self.assertEqual(
+            [v.keyword for v in violations],
+            ["SCHEMAV_ELEMENT_CONTENT", "SCHEMAV_ELEMENT_CONTENT", "violations-truncated"],
+        )
 
 
 class TestCharacters(unittest.TestCase):

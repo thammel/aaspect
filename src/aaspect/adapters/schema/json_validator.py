@@ -4,13 +4,14 @@ from typing import Any
 import jsonschema_rs
 
 from aaspect.adapters.schema.schema_rewrite import prepare
-from aaspect.adapters.schema.violations import unchecked, violation
+from aaspect.adapters.schema.violations import capped, unchecked, violation
 from aaspect.domain.schema_check import SchemaViolation
 
 
 class JsonSchemaValidator:
-    def __init__(self, schema: dict[str, Any]) -> None:
+    def __init__(self, schema: dict[str, Any], max_violations: int) -> None:
         self._validator = jsonschema_rs.validator_for(prepare(schema))
+        self._max_violations = max_violations
 
     def validate(self, content: bytes) -> list[SchemaViolation]:
         try:
@@ -21,7 +22,8 @@ class JsonSchemaValidator:
             # Most files are valid; the yes/no check stops early and builds no messages.
             if self._validator.is_valid(instance):
                 return []
-            return [_from_error(error) for error in self._validator.iter_errors(instance)]
+            errors = self._validator.iter_errors(instance)
+            return capped((_from_error(error) for error in errors), self._max_violations)
         except UnicodeEncodeError:
             # "\ud800" is legal JSON, but jsonschema-rs cannot take a lone surrogate.
             message = "Contains a lone UTF-16 surrogate, which is not a valid Unicode character"

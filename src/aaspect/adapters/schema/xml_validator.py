@@ -2,13 +2,14 @@ import threading
 
 from lxml import etree
 
-from aaspect.adapters.schema.violations import unchecked, violation
+from aaspect.adapters.schema.violations import capped, unchecked, violation
 from aaspect.domain.schema_check import SchemaViolation
 
 
 class XmlSchemaValidator:
-    def __init__(self, xsd: bytes) -> None:
+    def __init__(self, xsd: bytes, max_violations: int) -> None:
         self._schema = etree.XMLSchema(etree.fromstring(xsd, _safe_parser()))
+        self._max_violations = max_violations
         # The error log lives on the shared schema object, so concurrent validations
         # would read each other's errors.
         self._lock = threading.Lock()
@@ -26,7 +27,7 @@ class XmlSchemaValidator:
                 # Raised e.g. for entity references left unexpanded by the safe parser.
                 return [unchecked("unvalidatable", f"Schema validation aborted: {error}")]
             entries = list(self._schema.error_log)
-        return [_from_entry(root, entry) for entry in entries]
+        return capped((_from_entry(root, entry) for entry in entries), self._max_violations)
 
 
 def _safe_parser() -> etree.XMLParser:

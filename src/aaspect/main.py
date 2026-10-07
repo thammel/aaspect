@@ -3,6 +3,7 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
+from functools import partial
 from importlib.metadata import version
 
 import uvicorn
@@ -22,7 +23,7 @@ from aaspect.config.settings import Settings, load_settings
 def build_app(settings: Settings, resources: ExitStack) -> FastAPI:
     """The web app; worker processes and threads are released when `resources` closes."""
     validator = IsolatedSchemaValidator(
-        OfficialSchemaValidator,
+        partial(OfficialSchemaValidator, settings.max_violations_per_document),
         workers=settings.validation_workers,
         timeout_seconds=settings.validation_timeout_seconds,
         memory_bytes=settings.worker_memory_bytes,

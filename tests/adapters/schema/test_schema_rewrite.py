@@ -29,7 +29,7 @@ CHOICE_SCHEMA: dict[str, Any] = {
 
 
 def _validate(instance: object) -> list[SchemaViolation]:
-    return JsonSchemaValidator(CHOICE_SCHEMA).validate(json.dumps(instance).encode())
+    return JsonSchemaValidator(CHOICE_SCHEMA, 1000).validate(json.dumps(instance).encode())
 
 
 def _nested_collections(depth: int) -> bytes:
@@ -76,7 +76,7 @@ class TestModelTypeDispatch(unittest.TestCase):
     def test_one_of_with_siblings_keeps_them(self) -> None:
         schema = json.loads(json.dumps(CHOICE_SCHEMA))
         schema["definitions"]["Element_choice"]["type"] = "object"
-        violations = JsonSchemaValidator(schema).validate(b"[]")
+        violations = JsonSchemaValidator(schema, 1000).validate(b"[]")
         self.assertIn("type", [v.keyword for v in violations])
 
 
