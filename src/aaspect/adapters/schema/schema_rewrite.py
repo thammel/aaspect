@@ -1,6 +1,6 @@
 """Load-time rewrites that make the official JSON schemas usable with jsonschema-rs.
 
-Both keep the valid/invalid verdict and fail loudly on a form they do not recognise, so
+Both keep the valid/invalid verdict and fail loudly on a form they do not recognize, so
 a schema update cannot silently slip past them.
 """
 

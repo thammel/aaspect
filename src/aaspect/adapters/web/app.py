@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from aaspect.adapters.web.guards import BodySizeLimit, SameOriginPosts, SecurityHeaders
-from aaspect.adapters.web.routes import Analyse, Pages, WebLimits, router
+from aaspect.adapters.web.routes import Analyze, Pages, WebLimits, router
 from aaspect.domain.blocks import Finding, Table
 from aaspect.ports.report_writer import ReportWriter
 
@@ -15,12 +15,12 @@ _TOO_LARGE = "The upload is larger than the allowed total size."
 
 
 def create_app(
-    analyse: Analyse, writer: ReportWriter, limits: WebLimits, allowed_hosts: Sequence[str]
+    analyze: Analyze, writer: ReportWriter, limits: WebLimits, allowed_hosts: Sequence[str]
 ) -> FastAPI:
     package = files("aaspect.adapters.web")
     pages = Pages(template_environment(str(package.joinpath("templates"))), limits)
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    app.include_router(router(analyse, writer, pages, limits))
+    app.include_router(router(analyze, writer, pages, limits))
     app.mount("/static", StaticFiles(directory=str(package.joinpath("static"))), name="static")
     app.add_middleware(
         BodySizeLimit,

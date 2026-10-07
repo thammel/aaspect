@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block head %}<script src="/static/upload.js" defer></script>{% endblock %}
 {% block content %}
-<h1>Analyse AAS files</h1>
+<h1>Analyze AAS files</h1>
 <form method="post" action="/analyses" enctype="multipart/form-data"
       data-max-files="{{ max_files }}" data-max-bytes="{{ max_upload_bytes }}">
   <label for="files">AASX, JSON or XML files</label>
@@ -23,6 +23,6 @@
   </select>
   <p class="hint">XML files always use the version of their namespace.</p>
 
-  <button type="submit">Analyse</button>
+  <button type="submit">Analyze</button>
 </form>
 {% endblock %}

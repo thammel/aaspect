@@ -10,7 +10,7 @@ from aaspect.ports.corpus_reader import CorpusReader
 from aaspect.ports.schema_validator import SchemaValidator
 
 
-class AnalyseCorpus:
+class AnalyzeCorpus:
     def __init__(
         self,
         reader: CorpusReader,

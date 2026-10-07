@@ -64,7 +64,7 @@ class TestSelectFiles(unittest.TestCase):
     def test_summary(self) -> None:
         self.assertEqual(
             _run("m.summary({chosen: [1, 2], total: 5}, 2, 512 * 2 ** 20)"),
-            "2 of 5 files will be analysed (limit: 2 files, 512 MB).",
+            "2 of 5 files will be analyzed (limit: 2 files, 512 MB).",
         )
         self.assertEqual(_run("m.summary({chosen: [], total: 0}, 2, 1)"), "")
 

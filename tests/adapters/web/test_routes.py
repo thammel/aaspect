@@ -20,7 +20,7 @@ LIMITS = WebLimits(
 HOSTS = ["testserver"]
 
 
-class FakeAnalyse:
+class FakeAnalyze:
     def __init__(self) -> None:
         self.calls: list[tuple[list[str], MetamodelVersion | None]] = []
 
@@ -35,8 +35,8 @@ def _files(*names: str, content: bytes = b"{}") -> list[tuple[str, tuple[str, by
 
 class TestRoutes(unittest.TestCase):
     def setUp(self) -> None:
-        self.analyse = FakeAnalyse()
-        self.client = TestClient(create_app(self.analyse, JsonReportWriter(), LIMITS, HOSTS))
+        self.analyze = FakeAnalyze()
+        self.client = TestClient(create_app(self.analyze, JsonReportWriter(), LIMITS, HOSTS))
 
     def _upload(self, files: list, version: str = "auto"):
         return self.client.post(
@@ -54,7 +54,7 @@ class TestRoutes(unittest.TestCase):
         response = self._upload(_files("a.json", "a.json", "dir/b.xml"), "3.1")
         self.assertEqual(response.status_code, 303)
         self.assertEqual(
-            self.analyse.calls, [(["a.json", "a.json (2)", "dir/b.xml"], MetamodelVersion.V3_1)]
+            self.analyze.calls, [(["a.json", "a.json (2)", "dir/b.xml"], MetamodelVersion.V3_1)]
         )
         page = self.client.get(response.headers["location"])
         self.assertEqual(page.status_code, 200)
@@ -66,11 +66,11 @@ class TestRoutes(unittest.TestCase):
 
     def test_named_empty_file_reaches_the_analysis(self) -> None:
         self._upload(_files("empty.json", content=b"") + _files("", content=b""))
-        self.assertEqual(self.analyse.calls, [(["empty.json"], None)])
+        self.assertEqual(self.analyze.calls, [(["empty.json"], None)])
 
     def test_auto_means_no_version(self) -> None:
         self._upload(_files("a.json"))
-        self.assertIsNone(self.analyse.calls[0][1])
+        self.assertIsNone(self.analyze.calls[0][1])
 
     def test_rejected_input(self) -> None:
         cases = {
@@ -84,12 +84,12 @@ class TestRoutes(unittest.TestCase):
                 response = self._upload(files, version)
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("Error 400", response.text)
-        self.assertEqual(self.analyse.calls, [])
+        self.assertEqual(self.analyze.calls, [])
 
     def test_too_large_by_declared_length(self) -> None:
         response = self._upload(_files("a.json", content=b"x" * 20_000))
         self.assertEqual(response.status_code, 413)
-        self.assertEqual(self.analyse.calls, [])
+        self.assertEqual(self.analyze.calls, [])
 
     def test_too_large_without_declared_length(self) -> None:
         def chunks() -> Iterator[bytes]:
@@ -147,7 +147,7 @@ class TestRoutes(unittest.TestCase):
                     "/analyses", files=_files("a.json"), headers=headers, follow_redirects=False
                 )
                 self.assertEqual(response.status_code, 403)
-        self.assertEqual(self.analyse.calls, [])
+        self.assertEqual(self.analyze.calls, [])
 
     def test_same_origin_posts_pass(self) -> None:
         for headers in ({"sec-fetch-site": "same-origin"}, {"origin": "http://testserver"}):

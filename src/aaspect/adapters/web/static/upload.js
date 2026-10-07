@@ -44,11 +44,11 @@ function entries(input, fromFolder) {
 function summary(selection, maxFiles, maxBytes) {
   if (selection.total === 0) return "";
   if (selection.chosen.length === selection.total) {
-    return `${selection.total} file(s) will be analysed.`;
+    return `${selection.total} file(s) will be analyzed.`;
   }
   const megabytes = Math.floor(maxBytes / 2 ** 20);
   return (
-    `${selection.chosen.length} of ${selection.total} files will be analysed ` +
+    `${selection.chosen.length} of ${selection.total} files will be analyzed ` +
     `(limit: ${maxFiles} files, ${megabytes} MB).`
   );
 }

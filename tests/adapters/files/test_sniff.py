@@ -7,7 +7,7 @@ V2_XML = b'<environment xmlns="http://www.admin-shell.io/aas/2/0"/>'
 
 
 class TestSniff(unittest.TestCase):
-    def test_recognises_by_content(self) -> None:
+    def test_recognizes_by_content(self) -> None:
         cases = {
             b'{"submodels": []}': Kind.JSON,
             b'\xef\xbb\xbf \n {"a": 1}': Kind.JSON,

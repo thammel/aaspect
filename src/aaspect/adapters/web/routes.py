@@ -14,7 +14,7 @@ from aaspect.domain.metamodel import NEWEST_FIRST, MetamodelVersion
 from aaspect.domain.report import Report
 from aaspect.ports.report_writer import ReportWriter
 
-type Analyse = Callable[[Sequence[Upload], MetamodelVersion | None], Report]
+type Analyze = Callable[[Sequence[Upload], MetamodelVersion | None], Report]
 
 # Pages show this much; the JSON download always has everything.
 _MAX_ROWS = 200
@@ -48,8 +48,8 @@ class Pages:
         return self.render("error.html", status, status_code=status, message=message)
 
 
-def router(analyse: Analyse, writer: ReportWriter, pages: Pages, limits: WebLimits) -> APIRouter:
-    handlers = _Handlers(analyse, writer, pages, limits)
+def router(analyze: Analyze, writer: ReportWriter, pages: Pages, limits: WebLimits) -> APIRouter:
+    handlers = _Handlers(analyze, writer, pages, limits)
     routes = APIRouter()
     routes.add_api_route("/", handlers.upload_form, methods=["GET"])
     routes.add_api_route("/analyses", handlers.start_analysis, methods=["POST"])
@@ -60,9 +60,9 @@ def router(analyse: Analyse, writer: ReportWriter, pages: Pages, limits: WebLimi
 
 class _Handlers:
     def __init__(
-        self, analyse: Analyse, writer: ReportWriter, pages: Pages, limits: WebLimits
+        self, analyze: Analyze, writer: ReportWriter, pages: Pages, limits: WebLimits
     ) -> None:
-        self._analyse = analyse
+        self._analyze = analyze
         self._writer = writer
         self._pages = pages
         self._max_files = limits.max_files
@@ -81,7 +81,7 @@ class _Handlers:
         try:
             uploads, version = await read_form(request, self._max_files)
             # Validation is CPU-bound; on the event loop it would block every request.
-            report = await run_in_threadpool(self._analyse, uploads, version)
+            report = await run_in_threadpool(self._analyze, uploads, version)
         except UploadRejected as rejected:
             return self._pages.error(rejected.status, rejected.message)
         finally:

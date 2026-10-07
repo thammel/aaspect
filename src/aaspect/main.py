@@ -16,7 +16,7 @@ from aaspect.adapters.schema.isolated import IsolatedSchemaValidator
 from aaspect.adapters.schema.validator import OfficialSchemaValidator
 from aaspect.adapters.web.app import create_app
 from aaspect.adapters.web.routes import WebLimits
-from aaspect.app.analyse_corpus import AnalyseCorpus
+from aaspect.app.analyze_corpus import AnalyzeCorpus
 from aaspect.config.settings import Settings, load_settings
 
 
@@ -40,7 +40,7 @@ def build_app(settings: Settings, resources: ExitStack) -> FastAPI:
         ),
         max_document_bytes=settings.max_document_bytes,
     )
-    analyse = AnalyseCorpus(
+    analyze = AnalyzeCorpus(
         reader,
         validator,
         version("aaspect"),
@@ -54,7 +54,7 @@ def build_app(settings: Settings, resources: ExitStack) -> FastAPI:
         max_stored_reports=settings.max_stored_reports,
     )
     allowed_hosts = [host.strip() for host in settings.allowed_hosts.split(",") if host.strip()]
-    return create_app(analyse.run, JsonReportWriter(), limits, allowed_hosts)
+    return create_app(analyze.run, JsonReportWriter(), limits, allowed_hosts)
 
 
 def main() -> None:

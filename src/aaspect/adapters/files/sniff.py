@@ -1,4 +1,4 @@
-"""Recognise JSON, XML and AASX by content. File extensions are not trusted."""
+"""Recognize JSON, XML and AASX by content. File extensions are not trusted."""
 
 import io
 from enum import Enum
