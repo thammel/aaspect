@@ -12,8 +12,13 @@ directory `schemas/json/aas.json` and `schemas/xml/AAS.xsd`.
 License: Creative Commons Attribution 4.0 International, see `LICENSE.txt` (identical in
 all three tags). Published by the Industrial Digital Twin Association (IDTA).
 
-The files are not modified. When loading the JSON schemas, AASpect rewrites one regular
-expression: characters outside the Basic Multilingual Plane are written as UTF-16
-surrogate pairs (`\ud800[\udc00-\udfff]|...`), which is replaced by the equivalent
-code-point range. Loading fails if any other surrogate form appears, so check this
-rewrite whenever the schemas are updated.
+The files are not modified. When loading the JSON schemas, AASpect rewrites two things
+in memory (`../schema_rewrite.py`):
+
+- Characters outside the Basic Multilingual Plane are matched as UTF-16 surrogate pairs
+  (`\ud800[\udc00-\udfff]|...`); this is replaced by the equivalent code-point range.
+- Each `oneOf` over element types is replaced by a choice on the element's `modelType`,
+  because listing all errors of the original `oneOf` grows exponentially with nesting.
+
+Loading fails if a surrogate pattern or a `oneOf` of another form appears, so check both
+rewrites whenever the schemas are updated.
