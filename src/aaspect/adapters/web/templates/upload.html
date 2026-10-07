@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Analyse AAS files</h1>
+<form method="post" action="/analyses" enctype="multipart/form-data">
+  <label for="files">AASX, JSON or XML files</label>
+  <input id="files" type="file" name="files" multiple required accept=".aasx,.json,.xml">
+  <p class="hint">Up to {{ max_files }} files and {{ max_upload_mb }} MB in total.</p>
+
+  <label for="version">Metamodel version</label>
+  <select id="version" name="version">
+    {% for version in versions %}
+    <option value="{{ version }}">{{ "auto (detect per file)" if version == "auto" else version }}</option>
+    {% endfor %}
+  </select>
+  <p class="hint">XML files always use the version of their namespace.</p>
+
+  <button type="submit">Analyse</button>
+</form>
+{% endblock %}
