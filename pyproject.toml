@@ -18,6 +18,9 @@ dependencies = [
   "uvicorn",
 ]
 
+[project.scripts]
+aaspect = "aaspect.main:main"
+
 [dependency-groups]
 dev = [
   "coverage", # Measures test coverage and enforces minimum coverage in CI.
