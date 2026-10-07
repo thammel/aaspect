@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from aaspect.app.schema_check import SECTION_KEY, check_schema
 from aaspect.domain.blocks import Finding, Location, Table
@@ -51,6 +52,16 @@ class TestCheckSchema(unittest.TestCase):
     def test_empty_corpus(self) -> None:
         section = check_schema(Corpus(()), FakeValidator({}), None)
         self.assertEqual(len(section.blocks), 2)
+
+    def test_parallel_map_gives_the_same_section(self) -> None:
+        corpus = Corpus(
+            tuple(AasDocument(f"{i}.json", DocumentFormat.JSON, b"{}") for i in range(30))
+        )
+        validator = FakeValidator({(f"{i}.json", V3_2): [VIOLATION] for i in range(0, 30, 3)})
+        sequential = check_schema(corpus, validator, None)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            parallel = check_schema(corpus, validator, None, pool.map)
+        self.assertEqual(parallel, sequential)
 
 
 if __name__ == "__main__":
