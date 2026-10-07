@@ -17,7 +17,7 @@ def full_report() -> Report:
                 "Schema check",
                 SectionStatus.COMPLETED,
                 blocks=(
-                    Table("Metamodel versions", ("Version", "Files"), (("3.2", 2),)),
+                    Table("Metamodel versions", ("Version", "Documents"), (("3.2", 2),)),
                     Table("Version per file", ("File",), tuple((f"{i}",) for i in range(250))),
                     Table("Empty", ("A",), ()),
                     Finding("pattern", Severity.ERROR, XSS, locations),

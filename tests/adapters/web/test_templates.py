@@ -38,6 +38,9 @@ class TestTemplates(unittest.TestCase):
         self.assertIn("50 more rows in the JSON download.", html)
         self.assertIn("5 more locations in the JSON download.", html)
         self.assertIn('href="/reports/k/report.json"', html)
+        self.assertIn("2 uploaded files ·", html)
+        self.assertIn("· 25 locations</h3>", html)
+        self.assertIn("· 1 location</h3>", html)
 
     def test_report_escapes_uploaded_text(self) -> None:
         html = _html("report.html", report=full_report(), key="k", max_rows=200, max_locations=20)

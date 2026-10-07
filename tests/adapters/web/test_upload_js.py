@@ -67,6 +67,12 @@ class TestSelectFiles(unittest.TestCase):
             "2 of 5 files will be analyzed (limit: 2 files, 512 MB).",
         )
         self.assertEqual(_run("m.summary({chosen: [], total: 0}, 2, 1)"), "")
+        self.assertEqual(
+            _run("m.summary({chosen: [1], total: 1}, 2, 1)"), "1 file will be analyzed."
+        )
+        self.assertEqual(
+            _run("m.summary({chosen: [1, 2], total: 2}, 2, 1)"), "2 files will be analyzed."
+        )
 
 
 if __name__ == "__main__":

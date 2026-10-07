@@ -81,6 +81,7 @@ class TestViolations(unittest.TestCase):
         )
         patterns = [v for v in _validate(content) if v.keyword == "SCHEMAV_CVC_PATTERN_VALID"]
         self.assertEqual([v.rule_path for v in patterns], ["property/idShort"] * 2)
+        self.assertTrue(patterns[0].message.startswith("Element 'idShort': [facet 'pattern']"))
         self.assertNotEqual(patterns[0].instance_path, patterns[1].instance_path)
 
     def test_prefixed_namespace(self) -> None:

@@ -1,3 +1,4 @@
+import re
 import threading
 
 from lxml import etree
@@ -30,6 +31,11 @@ class XmlSchemaValidator:
         return capped((_from_entry(root, entry) for entry in entries), self._max_violations)
 
 
+# libxml2 names every element with its full namespace ("{https://admin-shell.io/aas/3/0}id"),
+# which repeats the version the finding already states and makes each message long.
+_AAS_NAMESPACE = re.compile(r"\{https://admin-shell\.io/aas/3/[0-9]\}")
+
+
 def _safe_parser() -> etree.XMLParser:
     # Uploaded XML is untrusted: no entity expansion (XXE, billion laughs), no DTD or
     # network fetches, and libxml2's default depth and size limits stay on.
@@ -52,7 +58,7 @@ def _from_entry(root: etree._Element, entry: etree._LogEntry) -> SchemaViolation
         keyword=entry.type_name,
         rule_path=rule_path,
         instance_path=instance_path,
-        message=entry.message,
+        message=_AAS_NAMESPACE.sub("", entry.message),
     )
 
 

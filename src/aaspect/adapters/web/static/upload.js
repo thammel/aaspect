@@ -44,7 +44,7 @@ function entries(input, fromFolder) {
 function summary(selection, maxFiles, maxBytes) {
   if (selection.total === 0) return "";
   if (selection.chosen.length === selection.total) {
-    return `${selection.total} file(s) will be analyzed.`;
+    return `${selection.total} ${selection.total === 1 ? "file" : "files"} will be analyzed.`;
   }
   const megabytes = Math.floor(maxBytes / 2 ** 20);
   return (

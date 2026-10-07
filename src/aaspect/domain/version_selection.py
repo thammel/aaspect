@@ -103,7 +103,8 @@ def version_tables(results: Sequence[tuple[str, VersionOutcome]]) -> tuple[Table
     counts = Counter(_version_text(outcome) for _, outcome in results)
     distribution = Table(
         title="Metamodel versions",
-        columns=("Version", "Files"),
+        # Documents, not files: an AASX package can hold several.
+        columns=("Version", "Documents"),
         rows=tuple(
             (text, counts[text])
             for text in [*(version.value for version in NEWEST_FIRST), _UNDETERMINED]

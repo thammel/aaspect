@@ -2,7 +2,8 @@
 {% block title %}Report – AASpect{% endblock %}
 {% block content %}
 <h1>Report</h1>
-<p>{{ report.files | length }} uploaded file(s) · AASpect {{ report.aaspect_version }} ·
+{% set uploaded = report.files | length %}
+<p>{{ uploaded }} uploaded file{{ "s" if uploaded != 1 }} · AASpect {{ report.aaspect_version }} ·
   <a href="/reports/{{ key }}/report.json">Download JSON</a></p>
 
 {% for section in report.sections %}
@@ -32,7 +33,7 @@
   {% elif block is finding %}
   <article class="finding severity-{{ block.severity.value }}">
     <h3><span class="severity">{{ block.severity.value }}</span> <code>{{ block.rule_id }}</code>
-      · {{ block.locations | length }} location(s)</h3>
+      · {{ block.locations | length }} location{{ "s" if block.locations | length != 1 }}</h3>
     <p class="message">{{ block.message }}</p>
     {% if block.locations %}
     <ul class="locations">
