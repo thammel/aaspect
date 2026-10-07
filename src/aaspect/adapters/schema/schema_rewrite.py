@@ -55,12 +55,18 @@ def _dispatch_by_model_type(node: dict[str, Any], definitions: dict[str, Any]) -
     if None in tags or len(set(tags)) != len(tags):
         raise ValueError(f"oneOf is not a modelType choice: {branches}")
     dispatch = {
+        "type": "object",
         "required": ["modelType"],
         "properties": {"modelType": {"enum": tags}},
         "allOf": [
             {
-                # `required` inside `if`: without a tag no branch applies, instead of all.
-                "if": {"required": ["modelType"], "properties": {"modelType": {"const": tag}}},
+                # `required` and `properties` hold vacuously for a non-object or a missing
+                # tag; without `type` and `required` here, every branch would apply.
+                "if": {
+                    "type": "object",
+                    "required": ["modelType"],
+                    "properties": {"modelType": {"const": tag}},
+                },
                 "then": branch,
             }
             for tag, branch in zip(tags, branches, strict=True)

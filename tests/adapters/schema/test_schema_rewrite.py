@@ -64,6 +64,12 @@ class TestModelTypeDispatch(unittest.TestCase):
         [violation] = _validate({"a": "x"})
         self.assertEqual(violation.keyword, "required")
 
+    def test_non_objects_give_one_error(self) -> None:
+        for instance in ("x", 1, None, [], True):
+            with self.subTest(instance=instance):
+                [violation] = _validate(instance)
+                self.assertEqual(violation.keyword, "type")
+
     def test_other_one_of_fails_loudly(self) -> None:
         for branches in (
             [{"type": "string"}, {"type": "integer"}],
