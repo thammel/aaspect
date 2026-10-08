@@ -59,3 +59,5 @@ select = [
 [tool.pyright]
 include = ["src", "tests"]     # Type-check package and tests.
 typeCheckingMode = "standard"  # Balanced default; stricter than basic, less strict than strict.
+venvPath = "."                 # Resolve imports from the project's .venv, not whichever
+venv = ".venv"                 # python is first on PATH when pyright runs outside uv.

@@ -43,10 +43,10 @@ analysis, view the results in the browser and download them as **JSON** or **PDF
   types and elements that the template does not define.
 - Custom templates can be uploaded in addition to the IDTA templates.
 
-### Deployment *(planned)*
+### Deployment
 
-- Runs with Docker (`docker compose up`): the aaspect web app plus a Neo4j instance
-  with APOC.
+- Runs with Docker (`docker compose up`): the aaspect web app. A Neo4j instance with
+  APOC is *planned*, together with the metamodel constraint check.
 
 ---
 
@@ -68,6 +68,18 @@ At startup the server downloads the official schemas (about 330 KB) and serves n
 before they have arrived. While the download fails it logs why and tries again, with
 pauses growing from 30 seconds to 15 minutes; a changed file or a missing path is logged
 as an error, since it needs the operator.
+
+### With Docker
+
+```bash
+docker compose up --build   # then open http://127.0.0.1:8000
+```
+
+The container runs as an unprivileged user on a read-only file system and is reachable
+from this machine only. `compose.yaml` sets `AASPECT_VALIDATION_WORKERS` to 4 so that
+all workers at their memory limit fit the container's 10 GB; other settings are passed
+the same way, under `environment:`. The container needs outbound HTTPS for the schema
+download, or `AASPECT_DOWNLOAD_URL` pointing at a mirror.
 
 ## Configuration
 
@@ -165,6 +177,8 @@ src/aaspect/
 └── main.py        Composition root: builds the adapters and starts the server
 tests/             Mirrors src/aaspect/; tests/test_main.py drives the whole app over HTTP.
                    Pinned third-party files are downloaded once into .cache/
+Dockerfile         Image with the installed package only, run as an unprivileged user
+compose.yaml       Local deployment with resource limits
 ```
 
 ---

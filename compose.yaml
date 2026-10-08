@@ -1,0 +1,24 @@
+services:
+  aaspect:
+    build: .
+    image: aaspect
+    ports:
+      # Loopback only: reachable from this machine. Exposing it further is a deliberate
+      # change, together with AASPECT_ALLOWED_HOSTS.
+      - "127.0.0.1:8000:8000"
+    environment:
+      # Each worker may use up to AASPECT_WORKER_MEMORY_BYTES (2 GB); 4 workers fit the
+      # memory limit below even when every one of them hits it.
+      AASPECT_VALIDATION_WORKERS: "4"
+    mem_limit: 10g
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      # Large uploads are spooled to /tmp while the form is parsed; the upload limit is
+      # 512 MB, and two analyses may run at once.
+      - /tmp:size=1100m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
