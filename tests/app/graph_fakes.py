@@ -1,8 +1,9 @@
 import copy
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 
 from aaspect.domain.corpus import AasDocument
-from aaspect.domain.id_collisions import Environment, Rename
+from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 
 
 class FakeParser:
@@ -30,5 +31,28 @@ class RecordingGraph:
     def link_references(self) -> None:
         self.calls.append(("link", None))
 
+    def store_occurrences(self, occurrences: Sequence[Occurrence]) -> None:
+        self.calls.append(("occurrences", tuple(occurrences)))
+
     def restore_ids(self, renames: Sequence[Rename]) -> None:
         self.calls.append(("restore", tuple(renames)))
+
+
+class FakeStore:
+    def __init__(self) -> None:
+        self.graph = RecordingGraph()
+        self.closed = False
+
+    @contextmanager
+    def open(self) -> Generator[RecordingGraph]:
+        try:
+            yield self.graph
+        finally:
+            self.closed = True
+
+
+class BrokenStore:
+    @contextmanager
+    def open(self) -> Generator[RecordingGraph]:
+        raise ConnectionError("database unreachable")
+        yield RecordingGraph()

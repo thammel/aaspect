@@ -5,11 +5,19 @@ from neo4aas.core.client import AAS_NEO4J_MODEL_CONFIG, AASNeo4JClient
 from neo4aas.core.utils import irdi_base
 from neo4j.exceptions import DriverError, Neo4jError
 
-from aaspect.domain.id_collisions import Environment, Rename
+from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 
 # Without the uniqueness constraint, so that collision variants can share their id once
 # it is restored. Repeats are still merged by id during the import.
 MODEL_CONFIG = dataclasses.replace(AAS_NEO4J_MODEL_CONFIG, enforce_unique_ids=False)
+
+_STORE_OCCURRENCES = """
+UNWIND $occurrences AS occurrence
+MATCH (node:Identifiable {id: occurrence.id})
+SET node.occurrence_count = occurrence.documents
+"""
+# Keeps each transaction small on corpora with hundreds of thousands of objects.
+_OCCURRENCE_BATCH = 10_000
 
 _RESTORE_IDENTIFIABLES = """
 UNWIND $renames AS rename
@@ -44,6 +52,12 @@ class Neo4aasGraph:
 
     def link_references(self) -> None:
         self._client.resolve_references()
+
+    def store_occurrences(self, occurrences: Sequence[Occurrence]) -> None:
+        rows = [{"id": o.id, "documents": o.documents} for o in occurrences]
+        for start in range(0, len(rows), _OCCURRENCE_BATCH):
+            batch = rows[start : start + _OCCURRENCE_BATCH]
+            self._client.execute_clause(_STORE_OCCURRENCES, params={"occurrences": batch})
 
     def restore_ids(self, renames: Sequence[Rename]) -> None:
         if not renames:

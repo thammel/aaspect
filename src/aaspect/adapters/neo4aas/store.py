@@ -2,7 +2,7 @@ import logging
 import re
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import LiteralString, cast
 
@@ -34,7 +34,9 @@ class DozerDbStore:
         self._driver.close()
 
     @contextmanager
-    def open(self) -> Iterator[Neo4aasGraph]:
+    def open(self) -> Generator[Neo4aasGraph]:
+        # Fails at once; the first query would retry for about 30 s if the server is down.
+        self._driver.verify_connectivity()
         name = _checked(PREFIX + uuid.uuid4().hex)
         self._system("CREATE DATABASE $name NOWAIT", name=name)
         try:
@@ -51,9 +53,15 @@ class DozerDbStore:
 
     def drop_leftovers(self) -> None:
         """Drop the databases of analyses that a crash or restart cut short."""
-        records = self._system(
-            "SHOW DATABASES YIELD name WHERE name STARTS WITH $prefix RETURN name", prefix=PREFIX
-        )
+        try:
+            records = self._system(
+                "SHOW DATABASES YIELD name WHERE name STARTS WITH $prefix RETURN name",
+                prefix=PREFIX,
+            )
+        except Exception:
+            # The server may start after AASpect; analyses then fail until it is up.
+            logger.warning("Graph database not reachable", exc_info=True)
+            return
         for record in records:
             self._drop(record["name"])
 

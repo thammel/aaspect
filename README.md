@@ -115,7 +115,7 @@ part: 1 MB).
 | `AASPECT_MAX_CONCURRENT_ANALYSES` | `2` | Analyses running at once. Further uploads get "busy, try again" before anything is read, so at most this many uploads are held in memory. |
 | `AASPECT_MAX_STORED_REPORTS` | `20` | Reports kept in memory; the oldest is dropped first. |
 | `AASPECT_MAX_DOCUMENT_BYTES` | `1073741824` (1 GB) | All documents of one analysis together, including parts unpacked from AASX packages. Documents beyond it are reported as not read. |
-| `AASPECT_ANALYSIS_TIME_LIMIT_SECONDS` | `600` (10 min) | Time for one analysis. Documents not validated by then are reported as not checked. |
+| `AASPECT_ANALYSIS_TIME_LIMIT_SECONDS` | `600` (10 min) | Time for one analysis. Documents not validated by then are reported as not checked. The graph import is not limited yet; once it is, this value may need to be raised for large corpora. |
 
 ### AASX packages
 
@@ -156,7 +156,7 @@ Neo4j server with the DozerDB plugin (see `compose.yaml`), and drops it afterwar
 |---|---|---|
 | `AASPECT_NEO4J_URI` | `bolt://127.0.0.1:7687` | Address of the Neo4j server. |
 | `AASPECT_NEO4J_USER` | `neo4j` | User AASpect logs in as. It creates and drops databases, so it needs administration rights. |
-| `AASPECT_NEO4J_PASSWORD` | none | Password of that user. Never shown in logs or error messages. |
+| `AASPECT_NEO4J_PASSWORD` | none | Password of that user. Never shown in logs or error messages. Without it, the graph import is skipped. |
 
 ### Exposing the server
 

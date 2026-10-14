@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from typing import Protocol
 
-from aaspect.domain.id_collisions import Environment, Rename
+from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 
 
 class CorpusGraph(Protocol):
@@ -15,6 +15,11 @@ class CorpusGraph(Protocol):
 
     def link_references(self) -> None:
         """Link every Reference to its target. Call once, after the last upload."""
+        ...
+
+    def store_occurrences(self, occurrences: Sequence[Occurrence]) -> None:
+        """Record on each object how many documents contain it. Call before the restore,
+        while ids are still unique."""
         ...
 
     def restore_ids(self, renames: Sequence[Rename]) -> None:

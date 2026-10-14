@@ -79,6 +79,11 @@ class TestImportIntoNeo4j(unittest.TestCase):
             ],
         )
         self.assertEqual(len(result.collisions), 1)
+        counts = self.client.execute_clause(
+            "MATCH (sm:Submodel) RETURN sm.idShort AS idShort, sm.occurrence_count AS count"
+            " ORDER BY idShort"
+        )
+        self.assertEqual([tuple(row.values()) for row in counts or []], [("A", 2), ("B", 1)])
         references = self.client.execute_clause(
             "MATCH (r:Reference) WHERE r.target_id = 'urn:sm' RETURN DISTINCT"
             " r.keys_value[0] AS key, r.target_id_base AS base"

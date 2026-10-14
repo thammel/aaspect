@@ -1,8 +1,9 @@
 import unittest
 
-from aaspect.app.import_corpus import import_corpus
+from aaspect.app.import_corpus import ImportResult, import_corpus, import_section
+from aaspect.domain.blocks import Finding, Location, Severity, Table
 from aaspect.domain.corpus import AasDocument, DocumentFormat, ReadFailure
-from aaspect.domain.id_collisions import Collision, Rename
+from aaspect.domain.id_collisions import Collision, Occurrence, Rename
 from tests.app.graph_fakes import FakeParser, RecordingGraph
 
 
@@ -27,6 +28,13 @@ class TestImportCorpus(unittest.TestCase):
                 ("upload", _submodels(("x", "A"))),
                 ("upload", _submodels(("x__collision-1", "B"))),
                 ("link", None),
+                (
+                    "occurrences",
+                    (
+                        Occurrence("x", "x", "Submodel", 1),
+                        Occurrence("x__collision-1", "x", "Submodel", 1),
+                    ),
+                ),
                 ("restore", (Rename("x", "x__collision-1", 1),)),
             ],
         )
@@ -45,7 +53,9 @@ class TestImportCorpus(unittest.TestCase):
             result.not_imported,
             (ReadFailure("bad.json", "Not imported: not an AAS environment"),),
         )
-        self.assertEqual([call for call, _ in graph.calls], ["upload", "link", "restore"])
+        self.assertEqual(
+            [call for call, _ in graph.calls], ["upload", "link", "occurrences", "restore"]
+        )
 
     def test_unstorable_documents_are_reported_and_the_rest_imported(self) -> None:
         graph = RecordingGraph()
@@ -57,7 +67,41 @@ class TestImportCorpus(unittest.TestCase):
             result.not_imported,
             (ReadFailure("a.json", "Not imported: content cannot be stored"),),
         )
-        self.assertEqual([call for call, _ in graph.calls], ["upload", "link", "restore"])
+        self.assertEqual(
+            [call for call, _ in graph.calls], ["upload", "link", "occurrences", "restore"]
+        )
+
+
+class TestImportSection(unittest.TestCase):
+    def test_lists_counts_failures_and_collisions(self) -> None:
+        result = ImportResult(
+            imported=3,
+            collisions=(Collision("x", (("a.json",), ("b.json", "c.json"))),),
+            not_imported=(ReadFailure("bad.json", "Not imported: broken"),),
+            occurrences=(
+                Occurrence("x", "x", "Submodel", 1),
+                Occurrence("x__collision-1", "x", "Submodel", 2),
+                Occurrence("cd", "cd", "ConceptDescription", 3),
+            ),
+        )
+
+        summary, repeated, failure, first, second = import_section(result).blocks
+
+        assert isinstance(summary, Table) and isinstance(first, Finding)
+        assert isinstance(second, Finding)
+        self.assertEqual(summary.rows, ((3, 1, 1),))
+        assert isinstance(repeated, Table)
+        self.assertEqual(repeated.rows, (("cd", "ConceptDescription", 3), ("x", "Submodel", 2)))
+        self.assertEqual(
+            failure,
+            Finding(
+                "not-imported", Severity.ERROR, "Not imported: broken", (Location("bad.json"),)
+            ),
+        )
+        self.assertTrue(first.message.startswith("Content 1 of 2 under id x."))
+        self.assertEqual(first.locations, (Location("a.json", "x"),))
+        self.assertTrue(second.message.startswith("Content 2 of 2 under id x."))
+        self.assertEqual(second.locations, (Location("b.json", "x"), Location("c.json", "x")))
 
 
 if __name__ == "__main__":

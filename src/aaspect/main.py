@@ -18,6 +18,8 @@ from fastapi import FastAPI
 from aaspect.adapters.download.github import GithubDownload
 from aaspect.adapters.files.aasx import ArchiveLimits
 from aaspect.adapters.files.reader import FileCorpusReader
+from aaspect.adapters.neo4aas.parser import Neo4aasEnvironmentParser
+from aaspect.adapters.neo4aas.store import DozerDbStore
 from aaspect.adapters.report_json.writer import JsonReportWriter
 from aaspect.adapters.schema.isolated import IsolatedSchemaValidator
 from aaspect.adapters.schema.validator import (
@@ -67,6 +69,8 @@ def build_app(
         version("aaspect"),
         pool.map,
         time_limit_seconds=settings.analysis_time_limit_seconds,
+        graph_store=_graph_store(settings, resources),
+        parser=Neo4aasEnvironmentParser(),
     )
     limits = WebLimits(
         max_upload_bytes=settings.max_upload_bytes,
@@ -101,6 +105,15 @@ def wait_for_schemas(
             )
         sleep(pause)
         pause = min(pause * 2, _LAST_PAUSE_SECONDS)
+
+
+def _graph_store(settings: Settings, resources: ExitStack) -> DozerDbStore | None:
+    if not settings.neo4j_password:
+        return None
+    store = DozerDbStore(settings.neo4j_uri, settings.neo4j_user, settings.neo4j_password)
+    resources.callback(store.close)
+    store.drop_leftovers()
+    return store
 
 
 def main() -> None:

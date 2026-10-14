@@ -1,5 +1,8 @@
 import os
+import time
 import unittest
+
+from neo4j.exceptions import ServiceUnavailable
 
 from aaspect.adapters.neo4aas.store import PREFIX, DozerDbStore, _checked
 
@@ -15,6 +18,17 @@ class TestDatabaseName(unittest.TestCase):
         for name in ("aaspect-`x", "aaspect x", "Aaspect-1", "-aaspect", "ab", "a" * 64):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 _checked(name)
+
+
+class TestUnreachableServer(unittest.TestCase):
+    def test_open_fails_without_waiting_for_retries(self) -> None:
+        # Nothing listens on port 9 (the old discard service) on a normal machine.
+        store = DozerDbStore("bolt://127.0.0.1:9", "neo4j", "unused")
+        self.addCleanup(store.close)
+        started = time.monotonic()
+        with self.assertRaises(ServiceUnavailable), store.open():
+            pass
+        self.assertLess(time.monotonic() - started, 5)
 
 
 @unittest.skipUnless(_URI, "set AASPECT_TEST_NEO4J_URI to run against a DozerDB server")
