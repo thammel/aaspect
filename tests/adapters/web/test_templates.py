@@ -42,6 +42,10 @@ class TestTemplates(unittest.TestCase):
         self.assertIn("· 25 locations</h3>", html)
         self.assertIn("· 1 location</h3>", html)
 
+    def test_every_section_folds_and_starts_open(self) -> None:
+        html = _html("report.html", report=full_report(), key="k", max_rows=200, max_locations=20)
+        self.assertEqual(html.count("<details open>"), len(full_report().sections))
+
     def test_report_escapes_uploaded_text(self) -> None:
         html = _html("report.html", report=full_report(), key="k", max_rows=200, max_locations=20)
         self.assertNotIn(XSS, html)

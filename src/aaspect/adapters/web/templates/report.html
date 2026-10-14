@@ -8,7 +8,8 @@
 
 {% for section in report.sections %}
 <section>
-  <h2>{{ section.title }} <span class="status status-{{ section.status.value }}">{{ section.status.value }}</span></h2>
+<details open>
+  <summary><h2>{{ section.title }} <span class="status status-{{ section.status.value }}">{{ section.status.value }}</span></h2></summary>
   {% if section.reason %}<p class="reason">{{ section.reason }}</p>{% endif %}
 
   {% for block in section.blocks %}
@@ -48,6 +49,7 @@
   </article>
   {% endif %}
   {% endfor %}
+</details>
 </section>
 {% endfor %}
 {% endblock %}
