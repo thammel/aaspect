@@ -45,8 +45,8 @@ analysis, view the results in the browser and download them as **JSON** or **PDF
 
 ### Deployment
 
-- Runs with Docker (`docker compose up`): the aaspect web app. A Neo4j instance with
-  APOC is *planned*, together with the metamodel constraint check.
+- Runs with Docker (`docker compose up`): the aaspect web app and a Neo4j server with
+  APOC and the DozerDB plugin, which gives every analysis a database of its own.
 
 ---
 
@@ -72,8 +72,14 @@ as an error, since it needs the operator.
 ### With Docker
 
 ```bash
+echo "AASPECT_NEO4J_PASSWORD=$(openssl rand -hex 16)" > .env
 docker compose up --build   # then open http://127.0.0.1:8000
 ```
+
+The database password is read from `.env` (at least 8 characters); compose refuses to
+start without it. The database publishes no port; only the web app reaches it. Its files
+live in an unnamed volume that each `docker compose down` leaves behind; use
+`docker compose down -v` to delete them as well.
 
 The container runs as an unprivileged user on a read-only file system and is reachable
 from this machine only. `compose.yaml` sets `AASPECT_VALIDATION_WORKERS` to 4 so that
