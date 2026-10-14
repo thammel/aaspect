@@ -181,13 +181,16 @@ src/aaspect/
 │                  metamodel.py holds everything that differs between metamodel
 │                  versions: names, XML namespaces, pinned schemas.
 ├── ports/         Interfaces the use-cases depend on: read uploads, validate a
-│                  document, write a report, download a pinned file.
-├── app/           Use-cases: analyze a corpus, run the schema check.
+│                  document, write a report, parse and import into a graph,
+│                  download a pinned file.
+├── app/           Use-cases: analyze a corpus, run the schema check, import a corpus
+│                  into a graph database.
 ├── adapters/      Implementations of the ports, one package per outside concern:
 │   ├── files/         read JSON, XML and AASX uploads in memory, within limits
 │   ├── download/      download pinned files over HTTPS
 │   ├── schema/        validate with jsonschema-rs and lxml in isolated worker
 │   │                  processes
+│   ├── neo4aas/       convert documents and import them with neo4aas
 │   ├── report_json/   JSON report download
 │   └── web/           FastAPI + Jinja2 UI, templates/ and static/
 ├── config/        Settings from AASPECT_* environment variables
@@ -214,6 +217,14 @@ package build):
 
 ```bash
 uv run python precommit.py
+```
+
+The import into Neo4j is tested against a real server only when one is given, e.g. a
+DozerDB container with its port published:
+
+```bash
+AASPECT_TEST_NEO4J_URI=bolt://127.0.0.1:7687 AASPECT_TEST_NEO4J_PASSWORD=... \
+  uv run python -m unittest tests.adapters.neo4aas.test_graph
 ```
 
 CI runs these checks on every push to `main` and on pull requests.
