@@ -31,6 +31,8 @@ section > details > summary h2 { display: inline; }
 .status { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 1rem; background: var(--surface); }
 .status-completed { color: var(--ok); }
 .status-failed { color: var(--error); }
+.status-waiting, .status-running { color: var(--muted); font-style: italic; }
+.running { font-style: italic; }
 .reason { color: var(--error); }
 
 table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }

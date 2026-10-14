@@ -60,7 +60,7 @@ uv run aaspect          # then open http://127.0.0.1:8000
 ```
 
 Upload AASX, JSON or XML files, or a whole folder, and choose a metamodel version or
-"auto". The report shows the version of every file and groups recurring schema
+"auto". The report page opens at once and updates itself as each step finishes. It shows the version of every file and groups recurring schema
 violations; it can be downloaded as JSON. Reports are kept in memory only and are lost
 when the server stops.
 

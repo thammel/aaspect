@@ -7,7 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from aaspect.adapters.web.guards import BodySizeLimit, SameOriginPosts, SecurityHeaders
-from aaspect.adapters.web.routes import Analyze, Pages, WebLimits, router
+from aaspect.adapters.web.jobs import Analyze
+from aaspect.adapters.web.routes import Pages, WebLimits, router
 from aaspect.domain.blocks import Finding, Table
 from aaspect.ports.report_writer import ReportWriter
 

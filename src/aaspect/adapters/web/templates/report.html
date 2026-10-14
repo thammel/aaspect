@@ -1,14 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Report – AASpect{% endblock %}
+{% block head %}<script src="/static/report.js" defer></script>{% endblock %}
 {% block content %}
+<div id="report" data-key="{{ key }}" data-state="{{ state }}" data-finished="{{ "true" if report.finished else "false" }}">
 <h1>Report</h1>
 {% set uploaded = report.files | length %}
 <p>{{ uploaded }} uploaded file{{ "s" if uploaded != 1 }} · AASpect {{ report.aaspect_version }} ·
   <a href="/reports/{{ key }}/report.json">Download JSON</a></p>
+{% if not report.finished %}
+<p class="running">The analysis is still running. This page updates when a step finishes.</p>
+<noscript><p class="hint">Without JavaScript, reload the page to see progress.</p></noscript>
+{% endif %}
 
 {% for section in report.sections %}
 <section>
-<details open>
+<details open data-section="{{ section.key }}">
   <summary><h2>{{ section.title }} <span class="status status-{{ section.status.value }}">{{ section.status.value }}</span></h2></summary>
   {% if section.reason %}<p class="reason">{{ section.reason }}</p>{% endif %}
 
@@ -52,4 +58,5 @@
 </details>
 </section>
 {% endfor %}
+</div>
 {% endblock %}

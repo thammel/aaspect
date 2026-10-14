@@ -7,6 +7,8 @@ from aaspect.domain.blocks import Block
 
 
 class SectionStatus(StrEnum):
+    WAITING = "waiting"
+    RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -33,3 +35,8 @@ class Report:
     aaspect_version: str
     files: tuple[str, ...]
     sections: tuple[Section, ...]
+
+    @property
+    def finished(self) -> bool:
+        unfinished = (SectionStatus.WAITING, SectionStatus.RUNNING)
+        return all(section.status not in unfinished for section in self.sections)

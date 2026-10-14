@@ -63,6 +63,38 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertEqual(report.sections[0].status, SectionStatus.COMPLETED)
         self.assertEqual(report.sections[1].reason, "ConnectionError: database unreachable")
 
+    def test_progress_shows_each_step_starting_and_finishing(self) -> None:
+        states: list[tuple[str, ...]] = []
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            FakeValidator({}),
+            "0.1.0",
+            graph_store=FakeStore(),
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+
+        report = analyze.run(
+            UPLOADS, None, lambda r: states.append(tuple(s.status.value for s in r.sections))
+        )
+
+        self.assertEqual(
+            states,
+            [
+                ("waiting", "waiting"),
+                ("running", "waiting"),
+                ("completed", "running"),
+                ("completed", "completed"),
+            ],
+        )
+        self.assertTrue(report.finished)
+
+    def test_unconfigured_graph_import_is_skipped_from_the_start(self) -> None:
+        states: list[str] = []
+        AnalyzeCorpus(FakeReader(CORPUS), FakeValidator({}), "0.1.0").run(
+            UPLOADS, None, lambda r: states.append(r.sections[1].status.value)
+        )
+        self.assertEqual(states, ["skipped", "skipped", "skipped"])
+
 
 if __name__ == "__main__":
     unittest.main()

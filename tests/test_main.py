@@ -1,6 +1,7 @@
 """End-to-end smoke test: real adapters wired by main, driven through HTTP."""
 
 import json
+import time
 import unittest
 from contextlib import ExitStack
 from dataclasses import replace
@@ -34,7 +35,11 @@ class TestEndToEnd(unittest.TestCase):
             client = TestClient(build_app(settings, resources, download_schemas(cached)))
             response = client.post("/analyses", files=files, data={"version": "auto"})
             self.assertEqual(response.status_code, 200)
-            self.assertIn("Version per file", response.text)
+            for _ in range(600):
+                if client.get(f"{response.url}/status").json()["finished"]:
+                    break
+                time.sleep(0.05)
+            self.assertIn("Version per file", client.get(str(response.url)).text)
             report = json.loads(client.get(str(response.url) + "/report.json").content)
 
         section, graph_import = report["sections"]

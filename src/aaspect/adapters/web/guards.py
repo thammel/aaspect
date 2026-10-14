@@ -10,7 +10,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 _HEADERS = {
     "content-security-policy": (
         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; "
-        "form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+        "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
     ),
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",

@@ -27,6 +27,7 @@ from aaspect.adapters.schema.validator import (
     OfficialSchemaValidator,
     download_schemas,
 )
+from aaspect.adapters.web.access_log import MaskReportKeys
 from aaspect.adapters.web.app import create_app
 from aaspect.adapters.web.routes import WebLimits
 from aaspect.app.analyze_corpus import AnalyzeCorpus
@@ -122,6 +123,7 @@ def main() -> None:
     # container stop would otherwise wait for its kill.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     schemas = wait_for_schemas(GithubDownload(settings.download_url))
+    logging.getLogger("uvicorn.access").addFilter(MaskReportKeys())
     with ExitStack() as resources:
         uvicorn.run(build_app(settings, resources, schemas), host=settings.host, port=settings.port)
 

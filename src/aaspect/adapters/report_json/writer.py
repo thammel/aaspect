@@ -5,7 +5,7 @@ from aaspect.domain.blocks import Block, Finding, Location, Table
 from aaspect.domain.report import Report, Section
 
 # Bump on any change a consumer of downloaded reports could notice.
-FORMAT_VERSION = "1"
+FORMAT_VERSION = "2"
 
 
 class JsonReportWriter:
@@ -15,6 +15,8 @@ class JsonReportWriter:
         document = {
             "format_version": FORMAT_VERSION,
             "aaspect_version": report.aaspect_version,
+            # False while steps still wait or run; their sections then have no blocks yet.
+            "finished": report.finished,
             "files": list(report.files),
             "sections": [_section(section) for section in report.sections],
         }

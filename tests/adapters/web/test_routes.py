@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from aaspect.adapters.report_json.writer import JsonReportWriter
 from aaspect.adapters.web.app import create_app
+from aaspect.adapters.web.jobs import Progress
 from aaspect.adapters.web.routes import WebLimits
 from aaspect.domain.corpus import Upload
 from aaspect.domain.metamodel import MetamodelVersion
@@ -24,8 +25,11 @@ class FakeAnalyze:
     def __init__(self) -> None:
         self.calls: list[tuple[list[str], MetamodelVersion | None]] = []
 
-    def __call__(self, uploads: Sequence[Upload], version: MetamodelVersion | None) -> Report:
+    def __call__(
+        self, uploads: Sequence[Upload], version: MetamodelVersion | None, progress: Progress
+    ) -> Report:
         self.calls.append(([upload.name for upload in uploads], version))
+        progress(full_report())
         return full_report()
 
 
@@ -62,7 +66,7 @@ class TestRoutes(unittest.TestCase):
         download = self.client.get(response.headers["location"] + "/report.json")
         self.assertEqual(download.headers["content-type"], "application/json")
         self.assertIn("attachment", download.headers["content-disposition"])
-        self.assertEqual(json.loads(download.content)["format_version"], "1")
+        self.assertEqual(json.loads(download.content)["format_version"], "2")
 
     def test_named_empty_file_reaches_the_analysis(self) -> None:
         self._upload(_files("empty.json", content=b"") + _files("", content=b""))
@@ -116,7 +120,9 @@ class TestRoutes(unittest.TestCase):
     def test_busy_server_answers_503_before_reading_uploads(self) -> None:
         started, release = threading.Event(), threading.Event()
 
-        def slow(uploads: Sequence[Upload], version: MetamodelVersion | None) -> Report:
+        def slow(
+            uploads: Sequence[Upload], version: MetamodelVersion | None, progress: Progress
+        ) -> Report:
             started.set()
             release.wait(10)
             return full_report()
@@ -130,6 +136,20 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(client.get("/").status_code, 200)
         release.set()
         first.join(10)
+
+    def test_slot_is_released_after_an_oversized_streamed_upload(self) -> None:
+        def chunks() -> Iterator[bytes]:
+            for _ in range(30):
+                yield b"x" * 1000
+
+        for _ in range(3):
+            response = self.client.post(
+                "/analyses",
+                content=chunks(),
+                headers={"content-type": "multipart/form-data; boundary=b"},
+            )
+            self.assertEqual(response.status_code, 413)
+        self.assertEqual(self._upload(_files("a.json")).status_code, 303)
 
     def test_slot_is_released_after_rejection_and_success(self) -> None:
         for _ in range(3):

@@ -1,6 +1,6 @@
 import unittest
 
-from aaspect.domain.report import Section, SectionStatus
+from aaspect.domain.report import Report, Section, SectionStatus
 
 
 class TestSection(unittest.TestCase):
@@ -19,6 +19,18 @@ class TestSection(unittest.TestCase):
         for status in (SectionStatus.COMPLETED, SectionStatus.SKIPPED):
             with self.subTest(status=status):
                 self.assertIsNone(Section("schema", "Schema", status).reason)
+
+
+class TestReport(unittest.TestCase):
+    def test_finished_once_no_section_waits_or_runs(self) -> None:
+        def report(*statuses: SectionStatus) -> Report:
+            return Report(
+                "0.1.0", (), tuple(Section(str(i), "", s) for i, s in enumerate(statuses))
+            )
+
+        self.assertFalse(report(SectionStatus.COMPLETED, SectionStatus.WAITING).finished)
+        self.assertFalse(report(SectionStatus.RUNNING).finished)
+        self.assertTrue(report(SectionStatus.COMPLETED, SectionStatus.SKIPPED).finished)
 
 
 if __name__ == "__main__":

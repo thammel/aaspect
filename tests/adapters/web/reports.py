@@ -34,3 +34,11 @@ def full_report() -> Report:
             Section("analytics", "Analytics", SectionStatus.SKIPPED),
         ),
     )
+
+
+def running_report() -> Report:
+    return Report(
+        aaspect_version="0.1.0",
+        files=("a.json",),
+        sections=(Section("schema", "Schema check", SectionStatus.RUNNING),),
+    )
