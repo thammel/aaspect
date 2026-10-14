@@ -40,6 +40,13 @@ class AnalyzeCorpus:
         progress: Progress = lambda report: None,
     ) -> Report:
         """The finished report; `progress` also receives every state on the way there."""
+        # One upload of crafted files could otherwise keep the workers and the database
+        # busy for hours. The limit covers all steps together.
+        deadline = time.monotonic() + self._time_limit
+
+        def expired() -> bool:
+            return time.monotonic() > deadline
+
         sections = {
             schema_check.SECTION_KEY: Section(
                 schema_check.SECTION_KEY, schema_check.SECTION_TITLE, SectionStatus.WAITING
@@ -62,27 +69,26 @@ class AnalyzeCorpus:
         )
         publish()
         corpus = self._reader.read(uploads)
-        sections[schema_check.SECTION_KEY] = self._check_schema(corpus, requested_version).section
+        sections[schema_check.SECTION_KEY] = self._check_schema(
+            corpus, requested_version, expired
+        ).section
         if sections[import_corpus.SECTION_KEY].status is SectionStatus.WAITING:
             sections[import_corpus.SECTION_KEY] = Section(
                 import_corpus.SECTION_KEY, import_corpus.SECTION_TITLE, SectionStatus.RUNNING
             )
             publish()
-            sections[import_corpus.SECTION_KEY] = self._import_graph(corpus)
+            sections[import_corpus.SECTION_KEY] = self._import_graph(corpus, expired)
         return publish()
 
     def _check_schema(
-        self, corpus: Corpus, requested_version: MetamodelVersion | None
+        self,
+        corpus: Corpus,
+        requested_version: MetamodelVersion | None,
+        expired: Callable[[], bool],
     ) -> SchemaCheckResult:
-        # One upload of crafted files could otherwise keep every worker busy for hours.
-        deadline = time.monotonic() + self._time_limit
         try:
             return schema_check.check_schema(
-                corpus,
-                self._validator,
-                requested_version,
-                self._map_documents,
-                lambda: time.monotonic() > deadline,
+                corpus, self._validator, requested_version, self._map_documents, expired
             )
         except Exception as error:  # One failing analysis must not take the whole report down.
             return SchemaCheckResult(
@@ -101,11 +107,11 @@ class AnalyzeCorpus:
             import_corpus.SECTION_KEY, import_corpus.SECTION_TITLE, SectionStatus.WAITING
         )
 
-    def _import_graph(self, corpus: Corpus) -> Section:
+    def _import_graph(self, corpus: Corpus, expired: Callable[[], bool]) -> Section:
         assert self._graph_store is not None and self._parser is not None
         try:
             with self._graph_store.open() as graph:
-                result = import_corpus.import_corpus(corpus.documents, self._parser, graph)
+                result = import_corpus.import_corpus(corpus.documents, self._parser, graph, expired)
             return import_corpus.import_section(result)
         except Exception as error:  # One failing analysis must not take the whole report down.
             return _failed(import_corpus.SECTION_KEY, import_corpus.SECTION_TITLE, error)

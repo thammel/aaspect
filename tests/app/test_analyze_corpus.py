@@ -95,6 +95,18 @@ class TestAnalyzeCorpus(unittest.TestCase):
         )
         self.assertEqual(states, ["skipped", "skipped", "skipped"])
 
+    def test_time_limit_reaches_the_graph_import(self) -> None:
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            FakeValidator({}),
+            "0.1.0",
+            time_limit_seconds=0,
+            graph_store=FakeStore(),
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+        section = analyze.run(UPLOADS, None).sections[1]
+        self.assertIn("time limit", str(section.blocks))
+
 
 if __name__ == "__main__":
     unittest.main()
