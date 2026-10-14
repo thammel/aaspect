@@ -75,5 +75,45 @@ class TestSelectFiles(unittest.TestCase):
         )
 
 
+# A page reduced to what setUp touches: the form, its inputs and button, and window.
+_FAKE_PAGE = """
+const handlers = {};
+const on = (target) => (type, handler) => { handlers[target + type] = handler; };
+const input = () => ({ files: [], value: "", addEventListener: () => {} });
+const elements = {
+  "#files": input(), "#folder": input(), "#selection": { textContent: "" },
+  'button[type="submit"]': { disabled: false, textContent: "Analyze" },
+};
+const form = {
+  dataset: { maxFiles: "10", maxBytes: "1000000" },
+  querySelector: (selector) => elements[selector],
+  addEventListener: on("form"),
+};
+global.window = { addEventListener: on("window") };
+global.DataTransfer = class { constructor() { this.files = []; this.items = { add: () => {} }; } };
+m.setUp(form);
+const button = elements['button[type="submit"]'];
+const submit = () => {
+  const event = { prevented: false, preventDefault() { this.prevented = true; } };
+  handlers.formsubmit(event);
+  return event.prevented;
+};
+"""
+
+
+@unittest.skipUnless(NODE, "Node.js is not installed")
+class TestRepeatedSubmit(unittest.TestCase):
+    def test_only_the_first_submit_goes_through(self) -> None:
+        result = _run(f"(() => {{ {_FAKE_PAGE} return [submit(), submit(), button.disabled]; }})()")
+        self.assertEqual(result, [False, True, True])
+
+    def test_back_button_enables_the_form_again(self) -> None:
+        result = _run(
+            f"(() => {{ {_FAKE_PAGE} submit(); handlers.windowpageshow();"
+            " return [button.disabled, button.textContent, submit()]; })()"
+        )
+        self.assertEqual(result, [False, "Analyze", False])
+
+
 if __name__ == "__main__":
     unittest.main()

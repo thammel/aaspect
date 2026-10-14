@@ -68,7 +68,26 @@ function setUp(form) {
   filesInput.addEventListener("change", show);
   folderInput.addEventListener("change", show);
 
-  form.addEventListener("submit", () => {
+  // A second click would start a second analysis while the browser waits for the first;
+  // the server keeps running both, and a third finds no free slot.
+  const button = form.querySelector('button[type="submit"]');
+  const label = button.textContent;
+  let submitted = false;
+  window.addEventListener("pageshow", () => {
+    // Coming back with the Back button restores the page as it was left: disabled.
+    submitted = false;
+    button.disabled = false;
+    button.textContent = label;
+  });
+
+  form.addEventListener("submit", (event) => {
+    if (submitted) {
+      event.preventDefault();
+      return;
+    }
+    submitted = true;
+    button.disabled = true;
+    button.textContent = "Analyzing…";
     const transfer = new DataTransfer();
     for (const entry of current().chosen) {
       // The path inside the folder becomes the name, so equal names in different
@@ -91,5 +110,5 @@ if (typeof document !== "undefined") {
   });
 }
 if (typeof module !== "undefined") {
-  module.exports = { selectFiles, summary };
+  module.exports = { selectFiles, setUp, summary };
 }
