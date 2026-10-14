@@ -9,8 +9,8 @@ from aaspect.adapters.report_json.writer import JsonReportWriter
 from aaspect.adapters.web.app import create_app
 from aaspect.adapters.web.jobs import Progress
 from aaspect.domain.corpus import Upload
-from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Report
+from aaspect.domain.version_selection import VersionChoice
 from tests.adapters.web.reports import full_report, running_report
 from tests.adapters.web.test_routes import HOSTS, LIMITS, _files
 
@@ -30,7 +30,7 @@ class TestRunningAnalysis(unittest.TestCase):
         self.running, self.release = threading.Event(), threading.Event()
 
         def stepwise(
-            uploads: Sequence[Upload], version: MetamodelVersion | None, progress: Progress
+            uploads: Sequence[Upload], version: VersionChoice, progress: Progress
         ) -> Report:
             progress(running_report())
             self.running.set()
@@ -63,9 +63,7 @@ class TestRunningAnalysis(unittest.TestCase):
         self.assertEqual(busy.status_code, 503)
 
     def test_crashed_analysis_fails_its_unfinished_steps(self) -> None:
-        def crash(
-            uploads: Sequence[Upload], version: MetamodelVersion | None, progress: Progress
-        ) -> Report:
+        def crash(uploads: Sequence[Upload], version: VersionChoice, progress: Progress) -> Report:
             progress(running_report())
             raise RuntimeError("boom")
 

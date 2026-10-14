@@ -12,6 +12,7 @@ from aaspect.adapters.web.routes import WebLimits
 from aaspect.domain.corpus import Upload
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Report
+from aaspect.domain.version_selection import AutoOrder, VersionChoice
 from tests.adapters.web.reports import XSS, full_report
 
 LIMITS = WebLimits(
@@ -23,10 +24,10 @@ HOSTS = ["testserver"]
 
 class FakeAnalyze:
     def __init__(self) -> None:
-        self.calls: list[tuple[list[str], MetamodelVersion | None]] = []
+        self.calls: list[tuple[list[str], VersionChoice]] = []
 
     def __call__(
-        self, uploads: Sequence[Upload], version: MetamodelVersion | None, progress: Progress
+        self, uploads: Sequence[Upload], version: VersionChoice, progress: Progress
     ) -> Report:
         self.calls.append(([upload.name for upload in uploads], version))
         progress(full_report())
@@ -70,11 +71,16 @@ class TestRoutes(unittest.TestCase):
 
     def test_named_empty_file_reaches_the_analysis(self) -> None:
         self._upload(_files("empty.json", content=b"") + _files("", content=b""))
-        self.assertEqual(self.analyze.calls, [(["empty.json"], None)])
+        self.assertEqual(self.analyze.calls, [(["empty.json"], AutoOrder.OLDEST_FIRST)])
 
-    def test_auto_means_no_version(self) -> None:
-        self._upload(_files("a.json"))
-        self.assertIsNone(self.analyze.calls[0][1])
+    def test_version_choices(self) -> None:
+        for value, choice in (
+            ("auto", AutoOrder.OLDEST_FIRST),
+            ("auto-newest", AutoOrder.NEWEST_FIRST),
+            ("3.0", MetamodelVersion.V3_0),
+        ):
+            self._upload(_files("a.json"), value)
+            self.assertEqual(self.analyze.calls[-1][1], choice)
 
     def test_rejected_input(self) -> None:
         cases = {
@@ -120,9 +126,7 @@ class TestRoutes(unittest.TestCase):
     def test_busy_server_answers_503_before_reading_uploads(self) -> None:
         started, release = threading.Event(), threading.Event()
 
-        def slow(
-            uploads: Sequence[Upload], version: MetamodelVersion | None, progress: Progress
-        ) -> Report:
+        def slow(uploads: Sequence[Upload], version: VersionChoice, progress: Progress) -> Report:
             started.set()
             release.wait(10)
             return full_report()

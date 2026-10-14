@@ -11,14 +11,33 @@ from enum import StrEnum
 
 from aaspect.domain.blocks import Table
 from aaspect.domain.corpus import AasDocument
-from aaspect.domain.metamodel import NEWEST_FIRST, MetamodelVersion
+from aaspect.domain.metamodel import NEWEST_FIRST, OLDEST_FIRST, MetamodelVersion
 from aaspect.domain.schema_check import SchemaViolation
+
+
+class AutoOrder(StrEnum):
+    """The order auto mode tries versions in; the first valid one is kept."""
+
+    OLDEST_FIRST = "auto"
+    NEWEST_FIRST = "auto-newest"
+
+
+# What the user asked for: one version for every document without a declared one, or
+# auto mode, which picks per document.
+type VersionChoice = MetamodelVersion | AutoOrder
 
 
 class VersionBasis(StrEnum):
     DECLARED = "declared"
     REQUESTED = "requested"
-    AUTO = "auto"
+    AUTO_OLDEST_FIRST = "auto-oldest-first"
+    AUTO_NEWEST_FIRST = "auto-newest-first"
+
+
+_AUTO = {
+    AutoOrder.OLDEST_FIRST: (VersionBasis.AUTO_OLDEST_FIRST, OLDEST_FIRST),
+    AutoOrder.NEWEST_FIRST: (VersionBasis.AUTO_NEWEST_FIRST, NEWEST_FIRST),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,24 +59,25 @@ class VersionOutcome:
 
 def select_version(
     document: AasDocument,
-    requested: MetamodelVersion | None,
+    choice: VersionChoice,
     validate: Callable[[MetamodelVersion], Sequence[SchemaViolation]],
 ) -> VersionOutcome:
     """Validate `document` against the version it should be judged by.
 
-    A declared version wins over the requested one. On auto, versions are tried newest
-    first and the first valid one is kept, so older versions stay unchecked. If none is
-    valid, the version with the fewest violations is reported; on a tie, the newer one.
-    A file-level violation ends the search: the document could not be checked at all,
-    and every other version would fail the same way.
+    A declared version wins over the chosen one. On auto, versions are tried in the
+    chosen order and the first valid one is kept, so the versions after it stay
+    unchecked. If none is valid, the version with the fewest violations is reported; on
+    a tie, the one tried first. A file-level violation ends the search: the document
+    could not be checked at all, and every other version would fail the same way.
     """
     if document.declared_version is not None:
         return _attempt(document.declared_version, VersionBasis.DECLARED, validate)
-    if requested is not None:
-        return _attempt(requested, VersionBasis.REQUESTED, validate)
+    if isinstance(choice, MetamodelVersion):
+        return _attempt(choice, VersionBasis.REQUESTED, validate)
+    basis, order = _AUTO[choice]
     attempts: list[VersionOutcome] = []
-    for version in NEWEST_FIRST:
-        outcome = _attempt(version, VersionBasis.AUTO, validate)
+    for version in order:
+        outcome = _attempt(version, basis, validate)
         if outcome.valid or not outcome.validated:
             return outcome
         attempts.append(outcome)
@@ -70,14 +90,20 @@ def _attempt(
     validate: Callable[[MetamodelVersion], Sequence[SchemaViolation]],
 ) -> VersionOutcome:
     violations = tuple(validate(version))
-    if basis is VersionBasis.AUTO and any(violation.file_level for violation in violations):
+    if basis not in _FIXED and any(violation.file_level for violation in violations):
         return VersionOutcome(None, basis, violations)
     return VersionOutcome(version, basis, violations)
 
 
+_FIXED = {VersionBasis.DECLARED, VersionBasis.REQUESTED}
+
 _BASIS_TEXT = {
     VersionBasis.DECLARED: "XML namespace",
     VersionBasis.REQUESTED: "chosen by user",
+}
+_UNCHECKED_TEXT = {
+    VersionBasis.AUTO_OLDEST_FIRST: "auto: oldest valid version, newer versions not checked",
+    VersionBasis.AUTO_NEWEST_FIRST: "auto: newest valid version, older versions not checked",
 }
 
 
@@ -91,10 +117,10 @@ def _version_text(outcome: VersionOutcome) -> str:
 def _basis_text(outcome: VersionOutcome) -> str:
     if not outcome.validated:
         return "not validated"
-    if outcome.basis is not VersionBasis.AUTO:
+    if outcome.basis in _FIXED:
         return _BASIS_TEXT[outcome.basis]
     if outcome.valid:
-        return "auto: newest valid version, older versions not checked"
+        return _UNCHECKED_TEXT[outcome.basis]
     return "auto: no version valid, fewest violations"
 
 

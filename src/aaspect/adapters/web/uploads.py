@@ -5,9 +5,15 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 from aaspect.domain.corpus import Upload
-from aaspect.domain.metamodel import MetamodelVersion
+from aaspect.domain.metamodel import NEWEST_FIRST, MetamodelVersion
+from aaspect.domain.version_selection import AutoOrder, VersionChoice
 
-AUTO = "auto"
+# Form value and label of each choice, the default first.
+VERSION_CHOICES = (
+    (AutoOrder.OLDEST_FIRST.value, "auto: oldest valid version per file"),
+    (AutoOrder.NEWEST_FIRST.value, "auto: newest valid version per file"),
+    *((version.value, version.value) for version in NEWEST_FIRST),
+)
 _MAX_NAME_LENGTH = 200
 # The form has two fields; anything beyond that is not from our page.
 _MAX_FIELDS = 4
@@ -21,9 +27,7 @@ class UploadRejected(Exception):
         self.message = message
 
 
-async def read_form(
-    request: Request, max_files: int
-) -> tuple[list[Upload], MetamodelVersion | None]:
+async def read_form(request: Request, max_files: int) -> tuple[list[Upload], VersionChoice]:
     try:
         async with request.form(
             max_files=max_files, max_fields=_MAX_FIELDS, max_part_size=_MAX_FIELD_BYTES
@@ -65,10 +69,10 @@ def unique_names(names: list[str]) -> list[str]:
     return unique
 
 
-def _version(raw: object) -> MetamodelVersion | None:
-    if raw is None or raw == AUTO:
-        return None
+def _version(raw: object) -> VersionChoice:
+    if raw is None:
+        return AutoOrder.OLDEST_FIRST
     try:
-        return MetamodelVersion(raw)
+        return AutoOrder(raw) if raw in AutoOrder else MetamodelVersion(raw)
     except ValueError:
         raise UploadRejected(400, "Unknown metamodel version.") from None

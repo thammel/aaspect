@@ -7,7 +7,12 @@ from aaspect.domain.corpus import AasDocument, Corpus
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Section, SectionStatus
 from aaspect.domain.schema_check import SchemaViolation, group_violations
-from aaspect.domain.version_selection import VersionOutcome, select_version, version_tables
+from aaspect.domain.version_selection import (
+    VersionChoice,
+    VersionOutcome,
+    select_version,
+    version_tables,
+)
 from aaspect.ports.schema_validator import SchemaValidator
 
 SECTION_KEY = "schema"
@@ -40,7 +45,7 @@ class SchemaCheckResult:
 def check_schema(
     corpus: Corpus,
     validator: SchemaValidator,
-    requested: MetamodelVersion | None,
+    choice: VersionChoice,
     map_documents: MapDocuments = map,
     expired: Callable[[], bool] = lambda: False,
 ) -> SchemaCheckResult:
@@ -51,7 +56,7 @@ def check_schema(
         return [_TIME_LIMIT] if expired() else list(validator.validate(document, version))
 
     def outcome(document: AasDocument) -> VersionOutcome:
-        return select_version(document, requested, partial(validate, document))
+        return select_version(document, choice, partial(validate, document))
 
     judged = tuple(zip(corpus.documents, map_documents(outcome, corpus.documents), strict=True))
     outcomes = [(document.label, result) for document, result in judged]

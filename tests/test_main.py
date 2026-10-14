@@ -51,8 +51,8 @@ class TestEndToEnd(unittest.TestCase):
             [
                 [
                     "shell.json",
-                    "3.2",
-                    "auto: newest valid version, older versions not checked",
+                    "3.1",
+                    "auto: oldest valid version, newer versions not checked",
                     "yes",
                 ],
                 ["broken.json", "3.2", "auto: no version valid, fewest violations", "no"],

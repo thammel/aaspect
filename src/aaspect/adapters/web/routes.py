@@ -7,8 +7,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from aaspect.adapters.web.jobs import Analyses, Analyze
 from aaspect.adapters.web.store import ReportStore
-from aaspect.adapters.web.uploads import AUTO, UploadRejected, read_form
-from aaspect.domain.metamodel import NEWEST_FIRST
+from aaspect.adapters.web.uploads import VERSION_CHOICES, UploadRejected, read_form
 from aaspect.domain.report import Report
 from aaspect.ports.report_writer import ReportWriter
 
@@ -68,8 +67,7 @@ class _Handlers:
         self._analyses = Analyses(analyze, self._store, limits.max_concurrent_analyses)
 
     def upload_form(self) -> Response:
-        versions = [AUTO, *(version.value for version in NEWEST_FIRST)]
-        return self._pages.render("upload.html", versions=versions)
+        return self._pages.render("upload.html", versions=VERSION_CHOICES)
 
     async def start_analysis(self, request: Request) -> Response:
         # Each analysis holds its uploads in memory, so the slot is taken before reading

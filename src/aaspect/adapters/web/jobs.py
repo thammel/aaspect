@@ -5,13 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from aaspect.adapters.web.store import ReportStore
 from aaspect.domain.corpus import Upload
-from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Report
+from aaspect.domain.version_selection import VersionChoice
 
 logger = logging.getLogger(__name__)
 
 type Progress = Callable[[Report], None]
-type Analyze = Callable[[Sequence[Upload], MetamodelVersion | None, Progress], Report]
+type Analyze = Callable[[Sequence[Upload], VersionChoice, Progress], Report]
 
 _ABORTED = "Stopped by an unexpected error."
 
@@ -33,7 +33,7 @@ class Analyses:
         self._slots.release()
 
     def start(
-        self, uploads: Sequence[Upload], version: MetamodelVersion | None
+        self, uploads: Sequence[Upload], version: VersionChoice
     ) -> tuple[str, threading.Event]:
         """Runs in a slot reserved by the caller, which is released when the analysis ends.
         The event is set once the report exists, or the analysis has ended without one."""

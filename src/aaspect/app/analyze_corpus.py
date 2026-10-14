@@ -6,8 +6,8 @@ from aaspect.app import graph_import_section, schema_check
 from aaspect.app.import_corpus import import_corpus
 from aaspect.app.schema_check import SchemaCheckResult
 from aaspect.domain.corpus import Corpus, Upload
-from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Report, Section, SectionStatus
+from aaspect.domain.version_selection import VersionChoice
 from aaspect.ports.corpus_reader import CorpusReader
 from aaspect.ports.environment_parser import EnvironmentParser
 from aaspect.ports.graph_store import GraphStore
@@ -38,7 +38,7 @@ class AnalyzeCorpus:
     def run(
         self,
         uploads: Sequence[Upload],
-        requested_version: MetamodelVersion | None,
+        version_choice: VersionChoice,
         progress: Progress = lambda report: None,
     ) -> Report:
         """The finished report; `progress` also receives every state on the way there."""
@@ -67,7 +67,7 @@ class AnalyzeCorpus:
         publish(schema_key, sections[schema_key])
         publish(schema_key, replace(sections[schema_key], status=SectionStatus.RUNNING))
         corpus = self._reader.read(uploads)
-        schema = self._check_schema(corpus, requested_version, expired).section
+        schema = self._check_schema(corpus, version_choice, expired).section
         if sections[graph_key].status is not SectionStatus.WAITING:
             return publish(schema_key, schema)
         sections[schema_key] = schema
@@ -77,12 +77,12 @@ class AnalyzeCorpus:
     def _check_schema(
         self,
         corpus: Corpus,
-        requested_version: MetamodelVersion | None,
+        version_choice: VersionChoice,
         expired: Callable[[], bool],
     ) -> SchemaCheckResult:
         try:
             return schema_check.check_schema(
-                corpus, self._validator, requested_version, self._map_documents, expired
+                corpus, self._validator, version_choice, self._map_documents, expired
             )
         except Exception as error:  # One failing analysis must not take the whole report down.
             return SchemaCheckResult(

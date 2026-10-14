@@ -30,8 +30,9 @@ def _report_html(report: Report) -> str:
 
 class TestTemplates(unittest.TestCase):
     def test_upload(self) -> None:
-        html = _html("upload.html", versions=["auto", "3.2"])
+        html = _html("upload.html", versions=[("auto", "auto: oldest"), ("3.2", "3.2")])
         self.assertIn('name="files"', html)
+        self.assertIn('<option value="auto">auto: oldest</option>', html)
         self.assertIn("100 files and 512 MB", html)
         self.assertIn("webkitdirectory", html)
         self.assertIn('data-max-bytes="536870912"', html)
