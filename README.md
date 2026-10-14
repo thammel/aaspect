@@ -190,7 +190,8 @@ src/aaspect/
 │   ├── download/      download pinned files over HTTPS
 │   ├── schema/        validate with jsonschema-rs and lxml in isolated worker
 │   │                  processes
-│   ├── neo4aas/       convert documents and import them with neo4aas
+│   ├── neo4aas/       convert documents, import them with neo4aas, one database
+│   │                  per analysis on DozerDB
 │   ├── report_json/   JSON report download
 │   └── web/           FastAPI + Jinja2 UI, templates/ and static/
 ├── config/        Settings from AASPECT_* environment variables

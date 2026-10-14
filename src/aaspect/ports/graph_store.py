@@ -24,6 +24,6 @@ class CorpusGraph(Protocol):
 
 
 class GraphStore(Protocol):
-    def open(self, analysis_id: str) -> AbstractContextManager[CorpusGraph]:
-        """A new, empty graph for this analysis, deleted when the context exits."""
+    def open(self) -> AbstractContextManager[CorpusGraph]:
+        """A new, empty graph of its own, deleted when the context exits."""
         ...
