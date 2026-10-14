@@ -11,6 +11,10 @@ from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 # it is restored. Repeats are still merged by id during the import.
 MODEL_CONFIG = dataclasses.replace(AAS_NEO4J_MODEL_CONFIG, enforce_unique_ids=False)
 
+_IDENTIFIABLE_LISTS = ("assetAdministrationShells", "submodels", "conceptDescriptions")
+# What neo4aas's own bulk loader uses.
+_NODES_PER_TRANSACTION = 10_000
+
 _STORE_OCCURRENCES = """
 UNWIND $occurrences AS occurrence
 MATCH (node:Identifiable {id: occurrence.id})
@@ -40,9 +44,12 @@ class Neo4aasGraph:
     def __init__(self, client: AASNeo4JClient) -> None:
         self._client = client
 
-    def upload(self, environment: Environment) -> None:
+    def upload(self, environments: Sequence[Environment]) -> None:
+        # neo4aas reads only the three Identifiable lists, so joining them is the same as
+        # uploading each environment, in fewer and larger transactions.
+        merged = {key: _entries(environments, key) for key in _IDENTIFIABLE_LISTS}
         try:
-            self._client.upload_json(environment)
+            self._client.upload_json(merged, db_batch_size=_NODES_PER_TRANSACTION)
         except (DriverError, Neo4jError):
             raise
         except Exception as error:
@@ -73,3 +80,13 @@ class Neo4aasGraph:
         ]
         self._client.execute_clause(_RESTORE_IDENTIFIABLES, params={"renames": rows})
         self._client.execute_clause(_RESTORE_REFERENCES, params={"renames": rows})
+
+
+def _entries(environments: Sequence[Environment], key: str) -> list:
+    joined = []
+    for environment in environments:
+        entries = environment.get(key, [])
+        if not isinstance(entries, list):
+            raise ValueError(f"content cannot be stored: {key} is not a list")
+        joined.extend(entries)
+    return joined

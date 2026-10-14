@@ -8,9 +8,10 @@ from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 class CorpusGraph(Protocol):
     """The graph database of one analysis."""
 
-    def upload(self, environment: Environment) -> None:
-        """Raises `ValueError` for an environment whose content cannot be stored; a
-        failure of the database itself raises anything else."""
+    def upload(self, environments: Sequence[Environment]) -> None:
+        """Store several environments at once. Raises `ValueError`, having stored none of
+        them, if the content of one cannot be stored; a failure of the database itself
+        raises anything else."""
         ...
 
     def link_references(self) -> None:

@@ -47,7 +47,7 @@ class TestDozerDbStore(unittest.TestCase):
     def test_database_exists_only_while_open(self) -> None:
         before = self._databases()
         with self.store.open() as graph:
-            graph.upload({"submodels": [{"id": "urn:x", "modelType": "Submodel"}]})
+            graph.upload([{"submodels": [{"id": "urn:x", "modelType": "Submodel"}]}])
             graph.link_references()
             during = self._databases() - before
         self.assertEqual(len(during), 1)

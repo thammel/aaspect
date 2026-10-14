@@ -19,7 +19,7 @@ class TestUploadErrors(unittest.TestCase):
     def test_malformed_content_raises_value_error(self) -> None:
         graph = Neo4aasGraph(AASNeo4JClient(uri="", user="", model_config=MODEL_CONFIG))
         with self.assertRaises(ValueError):
-            graph.upload({"submodels": "not a list"})
+            graph.upload([{"submodels": "not a list"}])
 
 
 def _file(name: str, shell_id: str, id_short: str) -> AasDocument:

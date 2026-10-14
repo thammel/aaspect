@@ -72,6 +72,32 @@ class TestImportCorpus(unittest.TestCase):
         )
 
 
+class TestBatches(unittest.TestCase):
+    def test_documents_are_uploaded_fifty_at_a_time(self) -> None:
+        names = [f"{n:03}.json" for n in range(120)]
+        graph = RecordingGraph()
+
+        import_corpus(
+            [_document(name) for name in names],
+            FakeParser({name: _submodels((name, "A")) for name in names}),
+            graph,
+        )
+
+        self.assertEqual(graph.batches, [50, 50, 20])
+
+    def test_a_rejected_batch_is_retried_document_by_document(self) -> None:
+        names = [f"{n:02}.json" for n in range(5)]
+        environments = {name: _submodels((name, "A")) for name in names}
+        environments["02.json"] = {"unstorable": True}
+        graph = RecordingGraph()
+
+        result = import_corpus([_document(name) for name in names], FakeParser(environments), graph)
+
+        self.assertEqual(graph.batches, [1, 1, 1, 1])
+        self.assertEqual([failure.source for failure in result.not_imported], ["02.json"])
+        self.assertEqual(result.imported, 4)
+
+
 class TestImportSection(unittest.TestCase):
     def test_lists_counts_failures_and_collisions(self) -> None:
         result = ImportResult(

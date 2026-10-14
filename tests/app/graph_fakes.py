@@ -22,11 +22,13 @@ class FakeParser:
 class RecordingGraph:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
+        self.batches: list[int] = []
 
-    def upload(self, environment: Environment) -> None:
-        if environment.get("unstorable"):
+    def upload(self, environments: Sequence[Environment]) -> None:
+        if any(environment.get("unstorable") for environment in environments):
             raise ValueError("content cannot be stored")
-        self.calls.append(("upload", environment))
+        self.calls.extend(("upload", environment) for environment in environments)
+        self.batches.append(len(environments))
 
     def link_references(self) -> None:
         self.calls.append(("link", None))
