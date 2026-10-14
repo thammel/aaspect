@@ -21,6 +21,9 @@ class TestUniqueNames(unittest.TestCase):
             ["WAGO/sub/a.json", "WAGO/other/a.json", "x/y/b.xml", "etc/c", "upload", "upload (2)"],
         )
 
+    def test_colons_cannot_imitate_a_package_part(self) -> None:
+        self.assertEqual(unique_names(["p.aasx:/aasx/a.xml"]), ["p.aasx_/aasx/a.xml"])
+
     def test_long_names_keep_their_end(self) -> None:
         [name] = unique_names(["folder/" * 50 + "file.json"])
         self.assertEqual(len(name), 200)

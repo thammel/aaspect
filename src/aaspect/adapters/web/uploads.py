@@ -50,7 +50,10 @@ def unique_names(names: list[str]) -> list[str]:
     used: set[str] = set()
     unique = []
     for raw in names:
-        segments = [s for s in raw.replace("\\", "/").split("/") if s not in ("", ".", "..")]
+        # ":" separates a package from its part in document labels ("p.aasx:/aasx/a.xml"),
+        # so an uploaded name containing it could share the label of a package part.
+        cleaned = raw.replace("\\", "/").replace(":", "_")
+        segments = [s for s in cleaned.split("/") if s not in ("", ".", "..")]
         # Shortened from the front: the file name matters more than the folders above it.
         base = "/".join(segments)[-_MAX_NAME_LENGTH:] or "upload"
         name, count = base, 1
