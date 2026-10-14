@@ -8,6 +8,7 @@ from typing import LiteralString, cast
 
 from neo4aas.core.client import AASNeo4JClient
 from neo4j import GraphDatabase, Record
+from neo4j.exceptions import DriverError, Neo4jError
 
 from aaspect.adapters.neo4aas.graph import MODEL_CONFIG, Neo4aasGraph
 
@@ -18,6 +19,7 @@ PREFIX = "aaspect-"
 # a name reaches the query text, and only a name matching this may.
 _DATABASE_NAME = re.compile(r"[a-z][a-z0-9.-]{2,62}")
 _ONLINE_POLL_SECONDS = 0.2
+_FAILED = "The graph database failed; the server log has the details."
 
 
 class DozerDbStore:
@@ -35,19 +37,37 @@ class DozerDbStore:
 
     @contextmanager
     def open(self) -> Generator[Neo4aasGraph]:
+        try:
+            with self._database() as name:
+                # Schema is created afterwards, so that a failure there still closes the
+                # client's own driver.
+                client = AASNeo4JClient(
+                    self._uri,
+                    self._user,
+                    self._password,
+                    model_config=MODEL_CONFIG,
+                    database=name,
+                    auto_optimize=False,
+                )
+                try:
+                    client.optimize_database()
+                    yield Neo4aasGraph(client)
+                finally:
+                    client.driver.close()
+        except (DriverError, Neo4jError) as error:
+            # Driver messages name internal hosts and addresses; reports are public.
+            logger.warning("Graph database failed", exc_info=True)
+            raise RuntimeError(_FAILED) from error
+
+    @contextmanager
+    def _database(self) -> Generator[str]:
         # Fails at once; the first query would retry for about 30 s if the server is down.
         self._driver.verify_connectivity()
         name = _checked(PREFIX + uuid.uuid4().hex)
         self._system("CREATE DATABASE $name NOWAIT", name=name)
         try:
             self._wait_until_online(name)
-            client = AASNeo4JClient(
-                self._uri, self._user, self._password, model_config=MODEL_CONFIG, database=name
-            )
-            try:
-                yield Neo4aasGraph(client)
-            finally:
-                client.driver.close()
+            yield name
         finally:
             self._drop(name)
 

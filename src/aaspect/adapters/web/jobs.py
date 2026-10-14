@@ -48,7 +48,8 @@ class Analyses:
             try:
                 self._analyze(uploads, version, progress)
             except Exception:
-                logger.exception("Analysis %s stopped", key)
+                # Only a prefix: the key is the report's only access control.
+                logger.exception("Analysis %s… stopped", key[:6])
                 self._store.abort(key, _ABORTED)
             finally:
                 started.set()

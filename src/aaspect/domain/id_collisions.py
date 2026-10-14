@@ -8,7 +8,7 @@ uses, and given its own id back once references have been linked.
 
 import hashlib
 import json
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,10 +33,12 @@ class Rename:
 @dataclass(frozen=True, slots=True)
 class Collision:
     """One id with several contents; per content, the documents it occurs in. The first
-    content keeps the id."""
+    content keeps the id, unless none of its documents could be imported: then
+    `first_missing` is set, and references from other files to this id lead nowhere."""
 
     id: str
     variants: tuple[tuple[str, ...], ...]
+    first_missing: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,17 +65,14 @@ class IdScan:
         for _, identifier, content, kind in _with_content(environment):
             self._kinds.setdefault((identifier, content), kind)
             labels = self._contents.setdefault(identifier, {}).setdefault(content, [])
-            if label not in labels:
+            # A document's entries are added together, so a repeat can only be the last.
+            if not labels or labels[-1] != label:
                 labels.append(label)
 
     def plan(self) -> "RenamePlan":
         taken = set(self._contents)
         temporary: dict[tuple[str, str], Rename] = {}
-        collisions = []
         for identifier, contents in self._contents.items():
-            if len(contents) < 2:
-                continue
-            collisions.append(Collision(identifier, tuple(tuple(v) for v in contents.values())))
             index = 0
             for content in list(contents)[1:]:
                 index += 1
@@ -82,31 +81,45 @@ class IdScan:
                 name = f"{identifier}{_TEMPORARY_SUFFIX}{index}"
                 taken.add(name)
                 temporary[identifier, content] = Rename(identifier, name, index)
-        occurrences = tuple(
-            Occurrence(
-                temporary[identifier, content].temporary
-                if (identifier, content) in temporary
-                else identifier,
-                identifier,
-                self._kinds[identifier, content],
-                len(labels),
-            )
-            for identifier, contents in self._contents.items()
-            for content, labels in contents.items()
-        )
-        return RenamePlan(temporary, tuple(collisions), occurrences)
+        return RenamePlan(temporary, self._contents, self._kinds)
 
 
 class RenamePlan:
     def __init__(
         self,
         temporary: dict[tuple[str, str], Rename],
-        collisions: tuple[Collision, ...],
-        occurrences: tuple[Occurrence, ...],
+        contents: dict[str, dict[str, list[str]]],
+        kinds: dict[tuple[str, str], str],
     ) -> None:
         self._temporary = temporary
-        self.collisions = collisions
-        self.occurrences = occurrences
+        self._contents = contents
+        self._kinds = kinds
+
+    def collisions(self, excluding: Collection[str] = ()) -> tuple[Collision, ...]:
+        """Ids with several contents among the documents not in `excluding`, e.g. those
+        that could not be imported."""
+        found = []
+        for identifier, contents in self._contents.items():
+            variants = _kept(contents, excluding)
+            first_missing = bool(variants) and next(iter(contents)) not in variants
+            if len(variants) > 1 or first_missing:
+                kept = tuple(tuple(labels) for labels in variants.values())
+                found.append(Collision(identifier, kept, first_missing))
+        return tuple(found)
+
+    def occurrences(self, excluding: Collection[str] = ()) -> tuple[Occurrence, ...]:
+        return tuple(
+            Occurrence(
+                rename.temporary
+                if (rename := self._temporary.get((identifier, content)))
+                else identifier,
+                identifier,
+                self._kinds[identifier, content],
+                len(labels),
+            )
+            for identifier, contents in self._contents.items()
+            for content, labels in _kept(contents, excluding).items()
+        )
 
     @property
     def renames(self) -> tuple[Rename, ...]:
@@ -126,6 +139,15 @@ class RenamePlan:
             value = first_key.get("value")
             if isinstance(value, str) and local.get(value, value) != value:
                 first_key["value"] = local[value]
+
+
+def _kept(contents: dict[str, list[str]], excluding: Collection[str]) -> dict[str, list[str]]:
+    kept = {}
+    for content, labels in contents.items():
+        remaining = [label for label in labels if label not in excluding]
+        if remaining:
+            kept[content] = remaining
+    return kept
 
 
 def _with_content(environment: Environment) -> Iterator[tuple[dict[str, Any], str, str, str]]:

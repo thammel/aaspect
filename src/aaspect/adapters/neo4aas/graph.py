@@ -12,8 +12,19 @@ from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 MODEL_CONFIG = dataclasses.replace(AAS_NEO4J_MODEL_CONFIG, enforce_unique_ids=False)
 
 _IDENTIFIABLE_LISTS = ("assetAdministrationShells", "submodels", "conceptDescriptions")
-# What neo4aas's own bulk loader uses.
-_NODES_PER_TRANSACTION = 10_000
+
+# Codes seen for content neo4aas passes on but the server refuses: a missing id, a key
+# without a type, a list mixing text and numbers. Other statement errors would point at a
+# broken query, which must fail the step instead of every document.
+_CONTENT_REFUSED = {
+    "Neo.ClientError.Procedure.ProcedureCallFailed",
+    "Neo.ClientError.Statement.TypeError",
+}
+_TIMED_OUT = "Neo.ClientError.Transaction.TransactionTimedOut"
+_OUT_OF_MEMORY = "Neo.TransientError.General.MemoryPoolOutOfMemoryError"
+# Only the per-transaction limit is the document's fault; the shared pool can be used up
+# by other analyses. The server names the limit in its message.
+_TRANSACTION_LIMIT = "db.memory.transaction.max threshold"
 
 _STORE_OCCURRENCES = """
 UNWIND $occurrences AS occurrence
@@ -46,11 +57,17 @@ class Neo4aasGraph:
 
     def upload(self, environments: Sequence[Environment]) -> None:
         # neo4aas reads only the three Identifiable lists, so joining them is the same as
-        # uploading each environment, in fewer and larger transactions.
+        # uploading each environment. One call is one transaction.
         merged = {key: _entries(environments, key) for key in _IDENTIFIABLE_LISTS}
         try:
-            self._client.upload_json(merged, db_batch_size=_NODES_PER_TRANSACTION)
-        except (DriverError, Neo4jError):
+            self._client.upload_json(merged)
+        except Neo4jError as error:
+            # The write is one transaction, so a refused one stores nothing.
+            reason = _document_fault(error)
+            if reason:
+                raise ValueError(reason) from error
+            raise
+        except DriverError:
             raise
         except Exception as error:
             # neo4aas trusts the structure it is given; schema-invalid content fails with
@@ -90,3 +107,14 @@ def _entries(environments: Sequence[Environment], key: str) -> list:
             raise ValueError(f"content cannot be stored: {key} is not a list")
         joined.extend(entries)
     return joined
+
+
+def _document_fault(error: Neo4jError) -> str | None:
+    code = error.code or ""
+    if code in _CONTENT_REFUSED:
+        return f"content cannot be stored: {code}"
+    if code.startswith(_TIMED_OUT) or (
+        code == _OUT_OF_MEMORY and _TRANSACTION_LIMIT in (error.message or "")
+    ):
+        return "too large to store in one transaction"
+    return None

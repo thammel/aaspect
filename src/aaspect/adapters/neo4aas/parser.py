@@ -13,6 +13,9 @@ class Neo4aasEnvironmentParser:
 
     def parse(self, document: AasDocument) -> Environment:
         try:
+            # neo4aas reads a str as a file path; only bytes are content.
+            if not isinstance(document.content, bytes):
+                raise ValueError("not an AAS environment")
             if document.format is DocumentFormat.XML:
                 # The standard library parser expands no external entities, and its
                 # expat refuses entity amplification attacks.

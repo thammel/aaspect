@@ -47,11 +47,14 @@ def import_corpus(
         batch = importable[start : start + _BATCH_DOCUMENTS]
         failures.extend(_upload(batch, parser, plan, graph))
     graph.link_references()
-    graph.store_occurrences(plan.occurrences)
+    # Documents that could not be uploaded are not in the graph, so they count nowhere.
+    failed = {failure.source for failure in failures}
+    occurrences = plan.occurrences(excluding=failed)
+    graph.store_occurrences(occurrences)
     graph.restore_ids(plan.renames)
     failures.sort(key=lambda failure: failure.source)
     imported = len(ordered) - len(failures)
-    return ImportResult(imported, plan.collisions, tuple(failures), plan.occurrences)
+    return ImportResult(imported, plan.collisions(excluding=failed), tuple(failures), occurrences)
 
 
 def _upload(
@@ -63,8 +66,9 @@ def _upload(
     try:
         graph.upload(environments)
         return []
-    except ValueError:
-        pass
+    except ValueError as error:
+        if len(batch) == 1:
+            return [ReadFailure(batch[0].label, f"Not imported: {error}")]
     # Nothing of a rejected batch is stored, so each document is tried on its own to find
     # the ones that cannot be.
     failures = []
@@ -110,8 +114,13 @@ def _collision_findings(collision: Collision) -> Iterator[Finding]:
     for number, labels in enumerate(collision.variants, start=1):
         message = f"Content {number} of {count} under id {collision.id}. " + (
             "References from files without this id lead to this content."
-            if number == 1
+            if number == 1 and not collision.first_missing
             else "Analyzed as its own object, linked only from its own files."
         )
+        if collision.first_missing:
+            message += (
+                " The content first found under this id could not be imported, so"
+                " references from files without this id lead nowhere."
+            )
         locations = tuple(Location(file=label, identifiable_id=collision.id) for label in labels)
         yield Finding("id-collision", Severity.WARNING, message, locations)

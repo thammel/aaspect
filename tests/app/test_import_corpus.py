@@ -98,6 +98,50 @@ class TestBatches(unittest.TestCase):
         self.assertEqual(result.imported, 4)
 
 
+class TestFailedDocumentsCountNowhere(unittest.TestCase):
+    def test_counts_and_collisions_leave_out_documents_not_imported(self) -> None:
+        unstorable = {"submodels": [{"id": "x", "idShort": "A"}], "unstorable": True}
+        parser = FakeParser(
+            {
+                "a.json": unstorable,
+                "b.json": _submodels(("x", "B")),
+                "c.json": _submodels(("x", "A")),
+            }
+        )
+
+        result = import_corpus(
+            [_document(n) for n in ("a.json", "b.json", "c.json")], parser, RecordingGraph()
+        )
+
+        self.assertEqual(
+            {(o.id, o.documents) for o in result.occurrences}, {("x", 1), ("x__collision-1", 1)}
+        )
+        self.assertEqual(result.collisions, (Collision("x", (("c.json",), ("b.json",))),))
+
+
+class TestFirstContentNotImported(unittest.TestCase):
+    def _result(self, *names: str):
+        environments = {"a.json": {"submodels": [{"id": "x", "idShort": "Z"}], "unstorable": True}}
+        environments |= {name: _submodels(("x", name)) for name in names}
+        return import_corpus(
+            [_document(n) for n in environments], FakeParser(environments), RecordingGraph()
+        )
+
+    def test_remaining_contents_do_not_claim_the_id(self) -> None:
+        result = self._result("b.json", "c.json")
+        self.assertEqual(
+            result.collisions, (Collision("x", (("b.json",), ("c.json",)), first_missing=True),)
+        )
+        first = import_section(result).blocks[-2]
+        assert isinstance(first, Finding)
+        self.assertIn("lead nowhere", first.message)
+        self.assertNotIn("lead to this content", first.message)
+
+    def test_a_single_remaining_content_is_still_reported(self) -> None:
+        result = self._result("b.json")
+        self.assertEqual(result.collisions, (Collision("x", (("b.json",),), first_missing=True),))
+
+
 class TestImportSection(unittest.TestCase):
     def test_lists_counts_failures_and_collisions(self) -> None:
         result = ImportResult(

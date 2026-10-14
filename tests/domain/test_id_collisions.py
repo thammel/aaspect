@@ -34,7 +34,7 @@ class TestPlan(unittest.TestCase):
         plan = _plan_for(
             ("a", _environment(_submodel("x", "A"))), ("b", _environment(_submodel("x", "A")))
         )
-        self.assertEqual((plan.renames, plan.collisions), ((), ()))
+        self.assertEqual((plan.renames, plan.collisions()), ((), ()))
 
     def test_later_contents_get_numbered_temporary_ids(self) -> None:
         plan = _plan_for(
@@ -46,7 +46,7 @@ class TestPlan(unittest.TestCase):
         self.assertEqual(
             plan.renames, (Rename("x", "x__collision-1", 1), Rename("x", "x__collision-2", 2))
         )
-        self.assertEqual(plan.collisions, (Collision("x", (("a",), ("b", "d"), ("c",))),))
+        self.assertEqual(plan.collisions(), (Collision("x", (("a",), ("b", "d"), ("c",))),))
 
     def test_temporary_id_skips_ids_used_in_the_corpus(self) -> None:
         plan = _plan_for(
@@ -66,13 +66,30 @@ class TestPlan(unittest.TestCase):
             ("c", _environment(_submodel("x", "A"))),
         )
         self.assertEqual(
-            set(plan.occurrences),
+            set(plan.occurrences()),
             {
                 Occurrence("x", "x", "Submodel", 2),
                 Occurrence("x__collision-1", "x", "Submodel", 1),
                 Occurrence("aas", "aas", "AssetAdministrationShell", 1),
             },
         )
+
+    def test_excluded_documents_count_nowhere(self) -> None:
+        plan = _plan_for(
+            ("a", _environment(_submodel("x", "A"))),
+            ("b", _environment(_submodel("x", "B"))),
+            ("c", _environment(_submodel("x", "A"))),
+        )
+        self.assertEqual(
+            set(plan.occurrences(excluding={"a"})),
+            {Occurrence("x", "x", "Submodel", 1), Occurrence("x__collision-1", "x", "Submodel", 1)},
+        )
+        self.assertEqual(plan.collisions(excluding={"b"}), ())
+
+    def test_an_object_listed_twice_in_one_document_counts_once(self) -> None:
+        env = _environment(_submodel("x", "A"), _submodel("y", "B"), _submodel("x", "A"))
+        plan = _plan_for(("a", env), ("b", _environment(_submodel("x", "A"))))
+        self.assertIn(Occurrence("x", "x", "Submodel", 2), plan.occurrences())
 
 
 class TestRewrite(unittest.TestCase):

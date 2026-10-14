@@ -4,9 +4,11 @@ import unittest
 
 from neo4aas.core.client import AASNeo4JClient
 from neo4j import Record
+from neo4j.exceptions import Neo4jError
 
 from aaspect.adapters.neo4aas.graph import MODEL_CONFIG, Neo4aasGraph
 from aaspect.adapters.neo4aas.parser import Neo4aasEnvironmentParser
+from aaspect.adapters.neo4aas.store import DozerDbStore
 from aaspect.app.import_corpus import import_corpus
 from aaspect.domain.corpus import AasDocument, DocumentFormat
 
@@ -44,17 +46,59 @@ def _count(client: AASNeo4JClient, query: str) -> int:
     return record["c"]
 
 
-@unittest.skipUnless(_URI, "set AASPECT_TEST_NEO4J_URI to run against a graph database")
-class TestImportIntoNeo4j(unittest.TestCase):
-    """Works in the server's default database, and only while it is empty."""
+class _Refusing:
+    def __init__(self, code: str, message: str = "") -> None:
+        self.error = Neo4jError._hydrate_neo4j(code=code, message=message)
 
+    def upload_json(self, environment: dict) -> None:
+        raise self.error
+
+
+def _upload_with(code: str, message: str = "") -> Exception | None:
+    graph = Neo4aasGraph(_Refusing(code, message))  # type: ignore[arg-type]
+    try:
+        graph.upload([{}])
+    except Exception as error:
+        return error
+    return None
+
+
+class TestServerErrors(unittest.TestCase):
+    def test_refused_content_and_oversized_documents_are_the_documents_fault(self) -> None:
+        for code, message in (
+            ("Neo.ClientError.Procedure.ProcedureCallFailed", ""),
+            ("Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration", ""),
+            (
+                "Neo.TransientError.General.MemoryPoolOutOfMemoryError",
+                "... db.memory.transaction.max threshold reached",
+            ),
+        ):
+            with self.subTest(code=code):
+                self.assertIsInstance(_upload_with(code, message), ValueError)
+
+    def test_server_trouble_and_broken_queries_fail_the_step(self) -> None:
+        for code, message in (
+            (
+                "Neo.TransientError.General.MemoryPoolOutOfMemoryError",
+                "... db.memory.transaction.total.max threshold reached",
+            ),
+            ("Neo.ClientError.Statement.SyntaxError", ""),
+            ("Neo.TransientError.Transaction.DeadlockDetected", ""),
+        ):
+            with self.subTest(code=code):
+                error = _upload_with(code, message)
+                self.assertIsInstance(error, Neo4jError)
+                self.assertNotIsInstance(error, ValueError)
+
+
+@unittest.skipUnless(_URI, "set AASPECT_TEST_NEO4J_URI to run against a DozerDB server")
+class TestImportIntoNeo4j(unittest.TestCase):
     def setUp(self) -> None:
         assert _URI
-        self.client = AASNeo4JClient(_URI, "neo4j", _PASSWORD, model_config=MODEL_CONFIG)
-        self.addCleanup(self.client.driver.close)
-        if _count(self.client, "MATCH (n) RETURN count(n) AS c"):
-            self.skipTest("the default database is not empty")
-        self.addCleanup(self.client.execute_clause, "MATCH (n) DETACH DELETE n")
+        store = DozerDbStore(_URI, "neo4j", _PASSWORD)
+        self.addCleanup(store.close)
+        self.graph = self.enterContext(store.open())
+        self.client = self.graph._client
 
     def test_each_shell_links_to_the_variant_from_its_own_file(self) -> None:
         documents = [
@@ -63,7 +107,7 @@ class TestImportIntoNeo4j(unittest.TestCase):
             _file("c.json", "urn:aas-c", "A"),
         ]
 
-        result = import_corpus(documents, Neo4aasEnvironmentParser(), Neo4aasGraph(self.client))
+        result = import_corpus(documents, Neo4aasEnvironmentParser(), self.graph)
 
         rows = self.client.execute_clause(
             "MATCH (shell:AssetAdministrationShell)-->(:Reference)-[:references]->(sm:Submodel)"
@@ -95,6 +139,32 @@ class TestImportIntoNeo4j(unittest.TestCase):
             " RETURN count(n) AS c",
         )
         self.assertEqual(leftover, 0)
+
+    def test_content_the_server_refuses_is_reported_per_document(self) -> None:
+        refused = {
+            "no-id.json": {"submodels": [{"idShort": "A", "modelType": "Submodel"}]},
+            "key-without-type.json": {
+                "submodels": [
+                    {
+                        "id": "urn:k",
+                        "modelType": "Submodel",
+                        "semanticId": {
+                            "type": "ExternalReference",
+                            "keys": [{"type": "GlobalReference", "value": "a"}, {"value": "b"}],
+                        },
+                    }
+                ]
+            },
+        }
+        documents = [_file("a.json", "urn:aas-a", "A")] + [
+            AasDocument(name, DocumentFormat.JSON, json.dumps(env).encode())
+            for name, env in refused.items()
+        ]
+
+        result = import_corpus(documents, Neo4aasEnvironmentParser(), self.graph)
+
+        self.assertEqual(sorted(failure.source for failure in result.not_imported), sorted(refused))
+        self.assertEqual(_count(self.client, "MATCH (s:Submodel) RETURN count(s) AS c"), 1)
 
 
 if __name__ == "__main__":
