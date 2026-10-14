@@ -1,7 +1,9 @@
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 
-from aaspect.app import import_corpus, schema_check
+from aaspect.app import graph_import_section, schema_check
+from aaspect.app.import_corpus import import_corpus
 from aaspect.app.schema_check import SchemaCheckResult
 from aaspect.domain.corpus import Corpus, Upload
 from aaspect.domain.metamodel import MetamodelVersion
@@ -47,38 +49,30 @@ class AnalyzeCorpus:
         def expired() -> bool:
             return time.monotonic() > deadline
 
+        files = tuple(upload.name for upload in uploads)
         sections = {
             schema_check.SECTION_KEY: Section(
                 schema_check.SECTION_KEY, schema_check.SECTION_TITLE, SectionStatus.WAITING
             ),
-            import_corpus.SECTION_KEY: self._graph_waiting(),
+            graph_import_section.SECTION_KEY: self._graph_waiting(),
         }
 
-        def publish() -> Report:
-            report = Report(
-                aaspect_version=self._aaspect_version,
-                files=tuple(upload.name for upload in uploads),
-                sections=tuple(sections.values()),
-            )
+        def publish(key: str, section: Section) -> Report:
+            sections[key] = section
+            report = Report(self._aaspect_version, files, tuple(sections.values()))
             progress(report)
             return report
 
-        publish()
-        sections[schema_check.SECTION_KEY] = Section(
-            schema_check.SECTION_KEY, schema_check.SECTION_TITLE, SectionStatus.RUNNING
-        )
-        publish()
+        schema_key, graph_key = schema_check.SECTION_KEY, graph_import_section.SECTION_KEY
+        publish(schema_key, sections[schema_key])
+        publish(schema_key, replace(sections[schema_key], status=SectionStatus.RUNNING))
         corpus = self._reader.read(uploads)
-        sections[schema_check.SECTION_KEY] = self._check_schema(
-            corpus, requested_version, expired
-        ).section
-        if sections[import_corpus.SECTION_KEY].status is SectionStatus.WAITING:
-            sections[import_corpus.SECTION_KEY] = Section(
-                import_corpus.SECTION_KEY, import_corpus.SECTION_TITLE, SectionStatus.RUNNING
-            )
-            publish()
-            sections[import_corpus.SECTION_KEY] = self._import_graph(corpus, expired)
-        return publish()
+        schema = self._check_schema(corpus, requested_version, expired).section
+        if sections[graph_key].status is not SectionStatus.WAITING:
+            return publish(schema_key, schema)
+        sections[schema_key] = schema
+        publish(graph_key, replace(sections[graph_key], status=SectionStatus.RUNNING))
+        return publish(graph_key, self._import_graph(corpus, expired))
 
     def _check_schema(
         self,
@@ -98,23 +92,27 @@ class AnalyzeCorpus:
     def _graph_waiting(self) -> Section:
         if self._graph_store is None or self._parser is None:
             return Section(
-                import_corpus.SECTION_KEY,
-                import_corpus.SECTION_TITLE,
+                graph_import_section.SECTION_KEY,
+                graph_import_section.SECTION_TITLE,
                 SectionStatus.SKIPPED,
                 reason="No graph database is configured.",
             )
         return Section(
-            import_corpus.SECTION_KEY, import_corpus.SECTION_TITLE, SectionStatus.WAITING
+            graph_import_section.SECTION_KEY,
+            graph_import_section.SECTION_TITLE,
+            SectionStatus.WAITING,
         )
 
     def _import_graph(self, corpus: Corpus, expired: Callable[[], bool]) -> Section:
         assert self._graph_store is not None and self._parser is not None
         try:
             with self._graph_store.open() as graph:
-                result = import_corpus.import_corpus(corpus.documents, self._parser, graph, expired)
-            return import_corpus.import_section(result)
+                result = import_corpus(corpus.documents, self._parser, graph, expired)
+            return graph_import_section.import_section(result)
         except Exception as error:  # One failing analysis must not take the whole report down.
-            return _failed(import_corpus.SECTION_KEY, import_corpus.SECTION_TITLE, error)
+            return _failed(
+                graph_import_section.SECTION_KEY, graph_import_section.SECTION_TITLE, error
+            )
 
 
 def _failed(key: str, title: str, error: Exception) -> Section:
