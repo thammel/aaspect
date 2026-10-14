@@ -91,7 +91,7 @@ download, or `AASPECT_DOWNLOAD_URL` pointing at a mirror.
 
 AASpect reads `AASPECT_*` environment variables once at startup, e.g.
 `AASPECT_MAX_FILES=500 uv run aaspect`. Values must be positive whole numbers (except
-host names); sizes are in bytes. An invalid value stops the server at startup.
+host names, addresses and credentials); sizes are in bytes. An invalid value stops the server at startup.
 
 All uploaded content is treated as hostile. The limits below keep one upload from
 exhausting memory, CPU or the server's attention; the defaults leave wide margins over
@@ -146,6 +146,17 @@ exceeds its limits; the file then gets a "not validated" finding.
 | `AASPECT_VALIDATION_TIMEOUT_SECONDS` | `30` | Time for one document and version. Some values (very long ones that fail a pattern) make libxml2 extremely slow. |
 | `AASPECT_WORKER_MEMORY_BYTES` | `2147483648` (2 GB) | Memory of one worker process. |
 | `AASPECT_MAX_VIOLATIONS_PER_DOCUMENT` | `1000` | Violations listed per document and version; a note says when there were more. |
+
+### Graph database
+
+The metamodel constraint check imports each corpus into a database of its own on a
+Neo4j server with the DozerDB plugin (see `compose.yaml`), and drops it afterward.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AASPECT_NEO4J_URI` | `bolt://127.0.0.1:7687` | Address of the Neo4j server. |
+| `AASPECT_NEO4J_USER` | `neo4j` | User AASpect logs in as. It creates and drops databases, so it needs administration rights. |
+| `AASPECT_NEO4J_PASSWORD` | none | Password of that user. Never shown in logs or error messages. |
 
 ### Exposing the server
 

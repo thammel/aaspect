@@ -13,6 +13,11 @@ class TestLoadSettings(unittest.TestCase):
         )
         self.assertEqual((settings.host, settings.max_files), ("0.0.0.0", 50))
 
+    def test_password_is_read_but_not_shown(self) -> None:
+        settings = load_settings({"AASPECT_NEO4J_PASSWORD": "s3cret-pw"})
+        self.assertEqual(settings.neo4j_password, "s3cret-pw")
+        self.assertNotIn("s3cret-pw", repr(settings))
+
     def test_invalid_numbers(self) -> None:
         for raw in ("ten", "1.5", "0", "-3", ""):
             with self.subTest(raw=raw), self.assertRaises(ValueError):

@@ -8,7 +8,8 @@ from pathlib import Path
 from aaspect.config.settings import Settings
 
 README = Path(__file__).resolve().parents[1] / "README.md"
-ROW = re.compile(r"^\| `AASPECT_(\w+)` \| `([^`]*)`", re.MULTILINE)
+# A setting without a default is documented as "none".
+ROW = re.compile(r"^\| `AASPECT_(\w+)` \| (?:`([^`]*)`|none\b)", re.MULTILINE)
 
 
 class TestConfigurationTable(unittest.TestCase):

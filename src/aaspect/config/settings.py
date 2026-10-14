@@ -1,7 +1,7 @@
 """Settings, read once at startup from `AASPECT_*` environment variables."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Any
 
 _PREFIX = "AASPECT_"
@@ -34,23 +34,27 @@ class Settings:
     # Where third-party files such as the official schemas are downloaded from at startup:
     # GitHub's raw file server, or a mirror with the same paths.
     download_url: str = "https://raw.githubusercontent.com"
+    neo4j_uri: str = "bolt://127.0.0.1:7687"
+    neo4j_user: str = "neo4j"
+    # Kept out of repr so that logging or printing the settings cannot leak it.
+    neo4j_password: str = field(default="", repr=False)
 
 
 def load_settings(environment: Mapping[str, str]) -> Settings:
     """Defaults, overridden by e.g. `AASPECT_MAX_FILES=500`. Invalid values raise."""
     values: dict[str, Any] = {}
-    for field in fields(Settings):
-        raw = environment.get(_PREFIX + field.name.upper())
+    for setting in fields(Settings):
+        raw = environment.get(_PREFIX + setting.name.upper())
         if raw is None:
             continue
-        if field.type is str or field.type == "str":
-            values[field.name] = raw
+        if setting.type is str or setting.type == "str":
+            values[setting.name] = raw
             continue
         try:
             number = int(raw)
         except ValueError:
-            raise ValueError(f"{_PREFIX}{field.name.upper()} must be a whole number") from None
+            raise ValueError(f"{_PREFIX}{setting.name.upper()} must be a whole number") from None
         if number <= 0:
-            raise ValueError(f"{_PREFIX}{field.name.upper()} must be positive")
-        values[field.name] = number
+            raise ValueError(f"{_PREFIX}{setting.name.upper()} must be positive")
+        values[setting.name] = number
     return Settings(**values)
