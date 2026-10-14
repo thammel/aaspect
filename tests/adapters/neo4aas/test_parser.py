@@ -24,6 +24,21 @@ class TestParse(unittest.TestCase):
         environment = _parse(_XML, DocumentFormat.XML)
         self.assertEqual(environment["submodels"][0]["id"], "urn:x")
 
+    def test_xml_with_a_dtd_is_refused(self) -> None:
+        dtd = _XML.replace(
+            b'<?xml version="1.0"?>',
+            b'<?xml version="1.0"?><!DOCTYPE environment [<!ENTITY v "expanded">]>',
+        ).replace(b"<idShort>A</idShort>", b"<idShort>&v;</idShort>")
+        with self.assertRaisesRegex(ValueError, "DTD"):
+            _parse(dtd, DocumentFormat.XML)
+
+    def test_dtd_is_found_in_other_encodings_too(self) -> None:
+        text = _XML.decode().replace(
+            '<?xml version="1.0"?>', '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE environment>'
+        )
+        with self.assertRaisesRegex(ValueError, "DTD"):
+            _parse(text.encode("utf-16"), DocumentFormat.XML)
+
     def test_unreadable_content_raises_value_error(self) -> None:
         for content, format in (
             (b"{", DocumentFormat.JSON),
