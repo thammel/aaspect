@@ -63,7 +63,7 @@ def _tables(chosen: CorpusVersion, result: ConstraintResult) -> tuple[Table, Tab
         ),
     )
     per_rule = Table(
-        "Violations per constraint",
+        "Violations per constraint, counted per place in the data",
         ("Constraint", "Violations"),
         tuple(
             (rule.rule_id, rule.total if rule.status is RuleStatus.CHECKED else rule.status.value)

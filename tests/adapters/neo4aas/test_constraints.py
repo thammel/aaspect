@@ -7,7 +7,13 @@ from typing import cast
 from neo4aas.core.client import AASNeo4JClient
 from neo4j.exceptions import ServiceUnavailable
 
-from aaspect.adapters.neo4aas.constraints import _node_id, check_constraints, place_of
+from aaspect.adapters.neo4aas.constraints import (
+    _affected,
+    _node_id,
+    check_constraints,
+    place_of,
+)
+from aaspect.adapters.neo4aas.graph import MODEL_CONFIG
 from aaspect.adapters.neo4aas.parser import Neo4aasEnvironmentParser
 from aaspect.adapters.neo4aas.store import DozerDbStore
 from aaspect.app.import_corpus import import_corpus
@@ -49,7 +55,9 @@ class _Client:
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
 
-    def execute_clause(self, query: str, params: dict | None = None) -> list:
+    model_config = MODEL_CONFIG
+
+    def execute_clause(self, query: str, single: bool = False, params: dict | None = None):
         if "n.idShort AS id_short" in query:
             if self.error:
                 raise self.error
@@ -87,6 +95,12 @@ class TestRuleByRule(unittest.TestCase):
         statuses = [rule.status for rule in result.rules]
         self.assertEqual(statuses[:2], [RuleStatus.FAILED, RuleStatus.CHECKED])
         self.assertEqual(set(statuses[2:]), {RuleStatus.NOT_CHECKED})
+
+
+class TestAffected(unittest.TestCase):
+    def test_past_the_deadline_each_violation_counts_once(self) -> None:
+        client = cast(AASNeo4JClient, _Client())
+        self.assertEqual(_affected(client, ["a", "b", None], lambda: True), 3)
 
 
 def _property(id_short: str) -> dict:
@@ -203,7 +217,7 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         )
         self.assertEqual(
             {rule.rule_id: rule.total for rule in result.rules if rule.total},
-            {"AASd-002": 2, "AASd-122": 1, "AASd-124": 1},
+            {"AASd-002": 2, "AASd-122": 3, "AASd-124": 3},
         )
 
 

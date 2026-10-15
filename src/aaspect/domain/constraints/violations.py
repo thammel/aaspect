@@ -35,7 +35,8 @@ class RuleStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RuleResult:
-    """What one rule found: `total` counts every violation, `violations` lists at most a
+    """What one rule found: `total` counts the places in the data that break it, where a
+    shared Reference counts once per element holding it; `violations` lists at most a
     capped number of them."""
 
     rule_id: str

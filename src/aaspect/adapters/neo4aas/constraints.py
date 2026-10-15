@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from neo4aas.core.client import AASNeo4JClient
 from neo4aas.core.validation import AASConstraintChecker
 from neo4aas.core.validation import ConstraintViolation as CheckerViolation
+from neo4j import Record
 from neo4j.exceptions import DriverError
 
 from aaspect.domain.constraints.violations import (
@@ -39,6 +40,18 @@ _MAX_LISTED = 1_000
 _NODE_BATCH = 1_000
 # Walks up the containment edges only: a Reference links to its target by `references`,
 # which would make an AAS appear to contain its submodels. Real nesting is far below 64.
+# Identical References are stored once and shared, so one violating Reference stands for
+# every element holding it; an element counts once. The edges into a Reference come from
+# its holders, apart from the links neo4aas adds itself.
+_AFFECTED = """
+UNWIND $node_ids AS node_id
+MATCH (node) WHERE elementId(node) = node_id
+RETURN sum(
+    CASE WHEN node:Reference
+    THEN COUNT { (node)<-[edge]-() WHERE NOT type(edge) IN $virtual }
+    ELSE 1 END
+) AS affected
+"""
 _PLACES = """
 UNWIND $node_ids AS node_id
 MATCH (node) WHERE elementId(node) = node_id
@@ -76,7 +89,8 @@ def check_constraints(
         nodes = {_node_id(violation.details) for violation in listed}
         places = _places(client, {node for node in nodes if node is not None}, expired)
         located = tuple(_located(violation, places) for violation in listed)
-        rules.append(RuleResult(rule, len(found), located))
+        affected = _affected(client, [_node_id(violation.details) for violation in found], expired)
+        rules.append(RuleResult(rule, affected, located))
     return ConstraintResult(tuple(rules))
 
 
@@ -126,6 +140,20 @@ def _below(place: Place, steps: Iterable[Sequence]) -> Place:
         elif id_short is not None:
             path += ("." if path else "") + str(id_short)
     return Place(place.identifiable_id, place.collision_index, path)
+
+
+def _affected(client: AASNeo4JClient, nodes: list[str | None], expired: Callable[[], bool]) -> int:
+    """How many places in the data the violations of one rule stand for. Past the deadline,
+    each remaining violation counts once."""
+    node_ids = sorted({node for node in nodes if node is not None})
+    affected = len(nodes) - sum(1 for node in nodes if node is not None)
+    for start, batch in enumerate(_batches(node_ids)):
+        if expired():
+            return affected + len(node_ids) - start * _NODE_BATCH
+        params = {"node_ids": batch, "virtual": list(client.model_config.virtual_relationships)}
+        record = client.execute_clause(_AFFECTED, single=True, params=params)
+        affected += record["affected"] if isinstance(record, Record) else len(batch)
+    return affected
 
 
 def _batches(items: list[str]) -> Iterator[list[str]]:
