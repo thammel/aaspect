@@ -5,7 +5,10 @@ from neo4aas.core.client import AAS_NEO4J_MODEL_CONFIG, AASNeo4JClient
 from neo4aas.core.utils import irdi_base
 from neo4j.exceptions import DriverError, Neo4jError
 
+from aaspect.adapters.neo4aas.constraints import check_constraints
+from aaspect.domain.constraints.violations import ConstraintResult
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
+from aaspect.domain.metamodel import MetamodelVersion
 
 # Without the uniqueness constraint, so that collision variants can share their id once
 # it is restored. Repeats are still merged by id during the import.
@@ -97,6 +100,9 @@ class Neo4aasGraph:
         ]
         self._client.execute_clause(_RESTORE_IDENTIFIABLES, params={"renames": rows})
         self._client.execute_clause(_RESTORE_REFERENCES, params={"renames": rows})
+
+    def check_constraints(self, version: MetamodelVersion) -> ConstraintResult:
+        return check_constraints(self._client, version)
 
 
 def _entries(environments: Sequence[Environment], key: str) -> list:

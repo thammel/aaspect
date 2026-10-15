@@ -3,6 +3,7 @@ from contextlib import AbstractContextManager
 from typing import Protocol
 
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
+from aaspect.ports.constraint_checker import ConstraintChecker
 
 
 class CorpusGraph(Protocol):
@@ -29,7 +30,11 @@ class CorpusGraph(Protocol):
         ...
 
 
+class AnalysisGraph(CorpusGraph, ConstraintChecker, Protocol):
+    """A graph the corpus is imported into and then analyzed."""
+
+
 class GraphStore(Protocol):
-    def open(self) -> AbstractContextManager[CorpusGraph]:
+    def open(self) -> AbstractContextManager[AnalysisGraph]:
         """A new, empty graph of its own, deleted when the context exits."""
         ...

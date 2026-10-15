@@ -124,6 +124,9 @@ def main() -> None:
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     schemas = wait_for_schemas(GithubDownload(settings.download_url))
     logging.getLogger("uvicorn.access").addFilter(MaskReportKeys())
+    # The constraint checks query every label and edge type of the metamodel; the server
+    # warns about each one a corpus does not use, about 20 times per analysis.
+    logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
     with ExitStack() as resources:
         uvicorn.run(build_app(settings, resources, schemas), host=settings.host, port=settings.port)
 

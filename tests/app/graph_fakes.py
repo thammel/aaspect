@@ -2,8 +2,10 @@ import copy
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 
+from aaspect.domain.constraints.violations import ConstraintResult
 from aaspect.domain.corpus import AasDocument
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
+from aaspect.domain.metamodel import MetamodelVersion
 
 
 class FakeParser:
@@ -19,10 +21,14 @@ class FakeParser:
         return copy.deepcopy(self.environments[document.label])
 
 
+NO_VIOLATIONS = ConstraintResult((), ())
+
+
 class RecordingGraph:
-    def __init__(self) -> None:
+    def __init__(self, constraints: ConstraintResult | Exception = NO_VIOLATIONS) -> None:
         self.calls: list[tuple[str, object]] = []
         self.batches: list[int] = []
+        self.constraints = constraints
 
     def upload(self, environments: Sequence[Environment]) -> None:
         if any(environment.get("unstorable") for environment in environments):
@@ -39,10 +45,16 @@ class RecordingGraph:
     def restore_ids(self, renames: Sequence[Rename]) -> None:
         self.calls.append(("restore", tuple(renames)))
 
+    def check_constraints(self, version: MetamodelVersion) -> ConstraintResult:
+        self.calls.append(("constraints", version))
+        if isinstance(self.constraints, Exception):
+            raise self.constraints
+        return self.constraints
+
 
 class FakeStore:
-    def __init__(self) -> None:
-        self.graph = RecordingGraph()
+    def __init__(self, graph: RecordingGraph | None = None) -> None:
+        self.graph = graph or RecordingGraph()
         self.closed = False
 
     @contextmanager
