@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from aaspect.adapters.download.github import GithubDownload
 from aaspect.adapters.files.aasx import ArchiveLimits
 from aaspect.adapters.files.reader import FileCorpusReader
+from aaspect.adapters.neo4aas.notifications import UnusedSchemaNotifications
 from aaspect.adapters.neo4aas.parser import Neo4aasEnvironmentParser
 from aaspect.adapters.neo4aas.store import DozerDbStore
 from aaspect.adapters.report_json.writer import JsonReportWriter
@@ -124,9 +125,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     schemas = wait_for_schemas(GithubDownload(settings.download_url))
     logging.getLogger("uvicorn.access").addFilter(MaskReportKeys())
-    # The constraint checks query every label and edge type of the metamodel; the server
-    # warns about each one a corpus does not use, about 20 times per analysis.
-    logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
+    logging.getLogger("neo4j.notifications").addFilter(UnusedSchemaNotifications())
     with ExitStack() as resources:
         uvicorn.run(build_app(settings, resources, schemas), host=settings.host, port=settings.port)
 
