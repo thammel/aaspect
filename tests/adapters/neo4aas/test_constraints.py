@@ -93,6 +93,13 @@ class TestRuleByRule(unittest.TestCase):
             result = _check(_Client(_server_error(_REFUSED)), MetamodelVersion.V3_1, lambda: False)
         self.assertEqual(result.rules[0].status, RuleStatus.FAILED)
 
+    def test_the_log_leaves_out_messages_quoting_the_files(self) -> None:
+        error = _server_error(_REFUSED, "cannot use 'secret value from a file'")
+        with self.assertLogs("aaspect.adapters.neo4aas.constraints", "WARNING") as logs:
+            _check(_Client(error), MetamodelVersion.V3_1, lambda: False)
+        self.assertIn(_REFUSED, logs.output[0])
+        self.assertNotIn("secret value", "".join(logs.output))
+
     def test_the_server_running_short_fails_the_step(self) -> None:
         error = _server_error(_POOL_FULL, "db.memory.transaction.total.max threshold reached")
         with self.assertRaises(Neo4jError):

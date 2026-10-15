@@ -10,6 +10,7 @@ from neo4aas.core.client import AASNeo4JClient
 from neo4j import GraphDatabase, Record
 from neo4j.exceptions import DriverError, Neo4jError
 
+from aaspect.adapters.neo4aas.errors import described
 from aaspect.adapters.neo4aas.graph import MODEL_CONFIG, Neo4aasGraph
 from aaspect.domain.report import ShownError
 
@@ -57,7 +58,11 @@ class DozerDbStore:
                     client.driver.close()
         except (DriverError, Neo4jError) as error:
             # Driver messages name internal hosts and addresses; reports are public.
-            logger.warning("Graph database failed", exc_info=True)
+            if isinstance(error, DriverError):
+                logger.warning("Graph database failed", exc_info=True)
+            else:
+                # The server's message can quote values from the uploaded files.
+                logger.warning("Graph database failed: %s", described(error))
             raise ShownError(_FAILED) from error
 
     @contextmanager

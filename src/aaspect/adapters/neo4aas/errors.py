@@ -1,4 +1,6 @@
-"""Which database errors the uploaded content causes."""
+"""Which database errors the uploaded content causes, and how errors are logged."""
+
+import traceback
 
 from neo4j.exceptions import Neo4jError
 
@@ -27,3 +29,11 @@ def content_fault(error: Neo4jError) -> str | None:
     ):
         return "too large to store in one transaction"
     return None
+
+
+def described(error: BaseException) -> str:
+    """Type, server code and stack of `error`, without its message: messages can quote
+    values from the uploaded files, which do not belong in the server log."""
+    code = f" {error.code}" if isinstance(error, Neo4jError) and error.code else ""
+    stack = "".join(traceback.format_tb(error.__traceback__))
+    return f"{type(error).__name__}{code}\n{stack}"

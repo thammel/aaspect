@@ -1,5 +1,6 @@
 import logging
 import time
+import traceback
 from collections.abc import Callable, Sequence
 
 from aaspect.app import constraint_check, graph_import_section, schema_check
@@ -146,6 +147,8 @@ def _failed(key: str, error: Exception) -> Section:
     if isinstance(error, ShownError):
         reason = str(error)
     else:
-        logger.error("%s failed", _TITLES[key], exc_info=error)
+        # Without the message, which can quote values from the uploaded files.
+        stack = "".join(traceback.format_tb(error.__traceback__))
+        logger.error("%s failed: %s\n%s", _TITLES[key], type(error).__name__, stack)
         reason = f"Internal error ({type(error).__name__}); the server log has the details."
     return Section(key, _TITLES[key], SectionStatus.FAILED, reason=reason)

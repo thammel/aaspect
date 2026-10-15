@@ -9,7 +9,7 @@ from neo4aas.core.validation import ConstraintViolation as CheckerViolation
 from neo4j.exceptions import DriverError, Neo4jError
 
 from aaspect.adapters.neo4aas.counts import count_affected
-from aaspect.adapters.neo4aas.errors import content_fault
+from aaspect.adapters.neo4aas.errors import content_fault, described
 from aaspect.adapters.neo4aas.places import MAX_PLACES, below, find_places
 from aaspect.domain.constraints.violations import (
     ConstraintResult,
@@ -71,7 +71,7 @@ def _check_rule(
         # server running short or a broken query must fail the step instead.
         if isinstance(error, Neo4jError) and content_fault(error) is None:
             raise
-        logger.warning("Constraint %s could not be checked", rule, exc_info=True)
+        logger.warning("Constraint %s could not be checked: %s", rule, described(error))
         return RuleResult(rule, 0, status=RuleStatus.FAILED)
     try:
         located, complete = _locate(client, found, occurrences, expired)
@@ -80,7 +80,7 @@ def _check_rule(
     except Neo4jError as error:
         if content_fault(error) is None:
             raise
-        logger.warning("Constraint %s could not be located", rule, exc_info=True)
+        logger.warning("Constraint %s could not be located: %s", rule, described(error))
         return RuleResult(rule, len(found), located=RuleStatus.FAILED)
     status = RuleStatus.CHECKED if complete and counted else RuleStatus.NOT_CHECKED
     truncated = complete and len(located) < len(found)

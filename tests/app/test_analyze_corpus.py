@@ -105,6 +105,19 @@ class TestAnalyzeCorpus(unittest.TestCase):
         assert isinstance(summary, Table)
         self.assertEqual(summary.rows[0][1], "schema check failed, newest used")
 
+    def test_the_log_leaves_out_error_messages(self) -> None:
+        quoted = "-".join(["value", "from", "a", "file"])
+
+        class Quoting:
+            def validate(self, document: AasDocument, version: object) -> list:
+                raise ValueError(quoted)
+
+        analyze = AnalyzeCorpus(FakeReader(CORPUS), Quoting(), "0.1.0")
+        with self.assertLogs("aaspect.app.analyze_corpus", "ERROR") as logs:
+            analyze.run(UPLOADS, AUTO)
+        self.assertIn("ValueError", logs.output[0])
+        self.assertNotIn(quoted, "".join(logs.output))
+
     def test_failed_cleanup_keeps_the_finished_check(self) -> None:
         analyze = AnalyzeCorpus(
             FakeReader(CORPUS),
