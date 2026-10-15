@@ -125,6 +125,13 @@ function setUp(form) {
   // A second click would start a second analysis while the browser waits for the first;
   // the server keeps running both, and a third finds no free slot.
   let submitted = false;
+  // Inside another page, such as VS Code's browser view, Chromium refuses the picker while
+  // the folder input still works.
+  let pickerRefused = false;
+  const usePicker = () =>
+    typeof window.showDirectoryPicker === "function" &&
+    window.self === window.top &&
+    !pickerRefused;
   const folderEntries = () => (read ? read.entries : entries(folderInput, true));
   const current = () =>
     selectFiles(entries(filesInput, false), folderEntries(), maxFiles, maxBytes);
@@ -139,7 +146,7 @@ function setUp(form) {
   });
   folderInput.addEventListener("cancel", show);
   folderInput.addEventListener("click", (event) => {
-    if (typeof window.showDirectoryPicker !== "function") {
+    if (!usePicker()) {
       notice.textContent = "Reading the folder… a large folder takes a while.";
       return;
     }
@@ -151,8 +158,12 @@ function setUp(form) {
     let root;
     try {
       root = await window.showDirectoryPicker();
-    } catch {
-      return; // Cancelled.
+    } catch (error) {
+      if (error && error.name === "AbortError") return; // Cancelled.
+      // Refused by the browser: open the folder input instead, now and from now on.
+      pickerRefused = true;
+      folderInput.click();
+      return;
     }
     reading = true;
     button.disabled = true;

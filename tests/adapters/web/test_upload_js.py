@@ -142,7 +142,10 @@ class TestReadFolder(unittest.TestCase):
 _FAKE_PAGE = """
 const handlers = {};
 const on = (target) => (type, handler) => { handlers[target + type] = handler; };
-const input = (name) => ({ files: [], value: "", addEventListener: on(name) });
+const opened = [];
+const input = (name) => ({
+  files: [], value: "", addEventListener: on(name), click: () => opened.push(name),
+});
 const elements = {
   "#files": input("files"), "#folder": input("folder"), "#selection": { textContent: "" },
   'button[type="submit"]': { disabled: false, textContent: "Analyze" },
@@ -152,7 +155,7 @@ const form = {
   querySelector: (selector) => elements[selector],
   addEventListener: on("form"),
 };
-global.window = { addEventListener: on("window") };
+global.window = Object.assign(global.window || {}, { addEventListener: on("window") });
 const sent = [];
 global.DataTransfer = class {
   constructor() { this.files = []; this.items = { add: (f) => sent.push(f.name) }; }
@@ -201,6 +204,40 @@ class TestFolderPicker(unittest.TestCase):
         )
         # While reading, the button is disabled and a submit is refused.
         self.assertEqual(result, [True, [True, True], "1 file will be analyzed.", ["d/a.json"]])
+
+    def test_a_refused_picker_falls_back_to_the_folder_input(self) -> None:
+        result = _run(
+            f"(async () => {{ {_FAKE_PAGE}"
+            " window.showDirectoryPicker = async () => {"
+            ' const e = new Error("refused"); e.name = "SecurityError"; throw e; };'
+            " const click = () =>"
+            " ({ prevented: false, preventDefault() { this.prevented = true; } });"
+            " const first = click(); handlers.folderclick(first);"
+            " await new Promise((done) => setTimeout(done, 0));"
+            " const second = click(); handlers.folderclick(second);"
+            " return [first.prevented, opened, second.prevented]; })()"
+        )
+        self.assertEqual(result, [True, ["folder"], False])
+
+    def test_a_cancelled_picker_opens_nothing(self) -> None:
+        result = _run(
+            f"(async () => {{ {_FAKE_PAGE}"
+            " window.showDirectoryPicker = async () => {"
+            ' const e = new Error("cancel"); e.name = "AbortError"; throw e; };'
+            " handlers.folderclick({ preventDefault() {} });"
+            " await new Promise((done) => setTimeout(done, 0));"
+            " return opened; })()"
+        )
+        self.assertEqual(result, [])
+
+    def test_inside_another_page_the_folder_input_is_used(self) -> None:
+        result = _run(
+            f"(() => {{ global.window = {{ top: {{}}, showDirectoryPicker: () => null }};"
+            f" {_FAKE_PAGE}"
+            " const click = { prevented: false, preventDefault() { this.prevented = true; } };"
+            " handlers.folderclick(click); return click.prevented; })()"
+        )
+        self.assertFalse(result)
 
     def test_without_the_picker_the_folder_input_opens_with_a_notice(self) -> None:
         result = _run(
