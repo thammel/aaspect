@@ -5,7 +5,7 @@ from aaspect.domain.corpus import AasDocument, Corpus, DocumentFormat, Upload
 from aaspect.domain.report import SectionStatus
 from aaspect.domain.version_selection import AutoOrder
 from tests.app.fakes import BrokenValidator, FakeReader, FakeValidator
-from tests.app.graph_fakes import BrokenStore, FakeParser, FakeStore
+from tests.app.graph_fakes import BrokenStore, FakeParser, FakeStore, RecordingGraph
 
 UPLOADS = (Upload("a.json", b"{}"), Upload("b.txt", b""))
 CORPUS = Corpus((AasDocument("a.json", DocumentFormat.JSON, b"{}"),))
@@ -36,6 +36,7 @@ class TestAnalyzeCorpus(unittest.TestCase):
     def test_graph_import_is_skipped_without_a_database(self) -> None:
         report = AnalyzeCorpus(FakeReader(CORPUS), FakeValidator({}), "0.1.0").run(UPLOADS, AUTO)
         self.assertEqual(report.sections[1].status, SectionStatus.SKIPPED)
+        self.assertEqual(report.sections[2].status, SectionStatus.SKIPPED)
 
     def test_graph_import_runs_in_a_graph_of_its_own(self) -> None:
         store = FakeStore()
@@ -49,7 +50,8 @@ class TestAnalyzeCorpus(unittest.TestCase):
         section = analyze.run(UPLOADS, AUTO).sections[1]
         self.assertEqual(section.status, SectionStatus.COMPLETED)
         self.assertEqual(
-            [call for call, _ in store.graph.calls], ["upload", "link", "occurrences", "restore"]
+            [call for call, _ in store.graph.calls],
+            ["upload", "link", "occurrences", "restore", "constraints"],
         )
         self.assertTrue(store.closed)
 
@@ -64,6 +66,23 @@ class TestAnalyzeCorpus(unittest.TestCase):
         report = analyze.run(UPLOADS, AUTO)
         self.assertEqual(report.sections[0].status, SectionStatus.COMPLETED)
         self.assertEqual(report.sections[1].reason, "ConnectionError: database unreachable")
+        self.assertEqual(report.sections[2].reason, "The graph import failed.")
+
+    def test_failing_constraint_check_keeps_the_import(self) -> None:
+        store = FakeStore(RecordingGraph(RuntimeError("checker broke")))
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            FakeValidator({}),
+            "0.1.0",
+            graph_store=store,
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+        report = analyze.run(UPLOADS, AUTO)
+        self.assertEqual(
+            [s.status for s in report.sections[1:]], [SectionStatus.COMPLETED, SectionStatus.FAILED]
+        )
+        self.assertEqual(report.sections[2].reason, "RuntimeError: checker broke")
+        self.assertTrue(store.closed)
 
     def test_progress_shows_each_step_starting_and_finishing(self) -> None:
         states: list[tuple[str, ...]] = []
@@ -82,10 +101,12 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertEqual(
             states,
             [
-                ("waiting", "waiting"),
-                ("running", "waiting"),
-                ("completed", "running"),
-                ("completed", "completed"),
+                ("waiting", "waiting", "waiting"),
+                ("running", "waiting", "waiting"),
+                ("completed", "running", "waiting"),
+                ("completed", "completed", "waiting"),
+                ("completed", "completed", "running"),
+                ("completed", "completed", "completed"),
             ],
         )
         self.assertTrue(report.finished)

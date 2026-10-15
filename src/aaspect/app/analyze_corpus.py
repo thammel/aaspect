@@ -1,11 +1,11 @@
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import replace
 
-from aaspect.app import graph_import_section, schema_check
+from aaspect.app import constraint_check, graph_import_section, schema_check
 from aaspect.app.import_corpus import import_corpus
 from aaspect.app.schema_check import SchemaCheckResult
 from aaspect.domain.corpus import Corpus, Upload
+from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Report, Section, SectionStatus
 from aaspect.domain.version_selection import VersionChoice
 from aaspect.ports.corpus_reader import CorpusReader
@@ -14,6 +14,18 @@ from aaspect.ports.graph_store import GraphStore
 from aaspect.ports.schema_validator import SchemaValidator
 
 type Progress = Callable[[Report], None]
+type Publish = Callable[[str, Section], Report]
+
+_SCHEMA, _GRAPH, _CONSTRAINTS = (
+    schema_check.SECTION_KEY,
+    graph_import_section.SECTION_KEY,
+    constraint_check.SECTION_KEY,
+)
+_TITLES = {
+    _SCHEMA: schema_check.SECTION_TITLE,
+    _GRAPH: graph_import_section.SECTION_TITLE,
+    _CONSTRAINTS: constraint_check.SECTION_TITLE,
+}
 
 
 class AnalyzeCorpus:
@@ -50,12 +62,7 @@ class AnalyzeCorpus:
             return time.monotonic() > deadline
 
         files = tuple(upload.name for upload in uploads)
-        sections = {
-            schema_check.SECTION_KEY: Section(
-                schema_check.SECTION_KEY, schema_check.SECTION_TITLE, SectionStatus.WAITING
-            ),
-            graph_import_section.SECTION_KEY: self._graph_waiting(),
-        }
+        sections = {key: self._waiting(key) for key in _TITLES}
 
         def publish(key: str, section: Section) -> Report:
             sections[key] = section
@@ -63,16 +70,16 @@ class AnalyzeCorpus:
             progress(report)
             return report
 
-        schema_key, graph_key = schema_check.SECTION_KEY, graph_import_section.SECTION_KEY
-        publish(schema_key, sections[schema_key])
-        publish(schema_key, replace(sections[schema_key], status=SectionStatus.RUNNING))
+        publish(_SCHEMA, sections[_SCHEMA])
+        publish(_SCHEMA, _running(_SCHEMA))
         corpus = self._reader.read(uploads)
-        schema = self._check_schema(corpus, version_choice, expired).section
-        if sections[graph_key].status is not SectionStatus.WAITING:
-            return publish(schema_key, schema)
-        sections[schema_key] = schema
-        publish(graph_key, replace(sections[graph_key], status=SectionStatus.RUNNING))
-        return publish(graph_key, self._import_graph(corpus, expired))
+        schema = self._check_schema(corpus, version_choice, expired)
+        if sections[_GRAPH].status is not SectionStatus.WAITING:
+            return publish(_SCHEMA, schema.section)
+        sections[_SCHEMA] = schema.section
+        publish(_GRAPH, _running(_GRAPH))
+        versions = [(document.label, outcome.version) for document, outcome in schema.outcomes]
+        return self._graph_steps(corpus, version_choice, versions, expired, publish)
 
     def _check_schema(
         self,
@@ -85,35 +92,50 @@ class AnalyzeCorpus:
                 corpus, self._validator, version_choice, self._map_documents, expired
             )
         except Exception as error:  # One failing analysis must not take the whole report down.
-            return SchemaCheckResult(
-                _failed(schema_check.SECTION_KEY, schema_check.SECTION_TITLE, error)
-            )
+            return SchemaCheckResult(_failed(_SCHEMA, error))
 
-    def _graph_waiting(self) -> Section:
-        if self._graph_store is None or self._parser is None:
-            return Section(
-                graph_import_section.SECTION_KEY,
-                graph_import_section.SECTION_TITLE,
-                SectionStatus.SKIPPED,
-                reason="No graph database is configured.",
-            )
-        return Section(
-            graph_import_section.SECTION_KEY,
-            graph_import_section.SECTION_TITLE,
-            SectionStatus.WAITING,
-        )
+    def _waiting(self, key: str) -> Section:
+        if key != _SCHEMA and (self._graph_store is None or self._parser is None):
+            return _skipped(key, "No graph database is configured.")
+        return Section(key, _TITLES[key], SectionStatus.WAITING)
 
-    def _import_graph(self, corpus: Corpus, expired: Callable[[], bool]) -> Section:
+    def _graph_steps(
+        self,
+        corpus: Corpus,
+        choice: VersionChoice,
+        versions: list[tuple[str, MetamodelVersion | None]],
+        expired: Callable[[], bool],
+        publish: Publish,
+    ) -> Report:
+        """Import, then check, in one graph that is dropped afterward."""
         assert self._graph_store is not None and self._parser is not None
+        imported = checked = None
         try:
             with self._graph_store.open() as graph:
-                result = import_corpus(corpus.documents, self._parser, graph, expired)
-            return graph_import_section.import_section(result)
+                imported = import_corpus(corpus.documents, self._parser, graph, expired)
+                publish(_GRAPH, graph_import_section.import_section(imported))
+                publish(_CONSTRAINTS, _running(_CONSTRAINTS))
+                checked = constraint_check.check_constraints(
+                    graph, imported, choice, versions, expired
+                )
         except Exception as error:  # One failing analysis must not take the whole report down.
-            return _failed(
-                graph_import_section.SECTION_KEY, graph_import_section.SECTION_TITLE, error
-            )
+            if imported is None:
+                publish(_GRAPH, _failed(_GRAPH, error))
+                return publish(_CONSTRAINTS, _skipped(_CONSTRAINTS, "The graph import failed."))
+            # Dropping the database can fail after the check has finished.
+            checked = checked or _failed(_CONSTRAINTS, error)
+        return publish(_CONSTRAINTS, checked)
 
 
-def _failed(key: str, title: str, error: Exception) -> Section:
-    return Section(key, title, SectionStatus.FAILED, reason=f"{type(error).__name__}: {error}")
+def _running(key: str) -> Section:
+    return Section(key, _TITLES[key], SectionStatus.RUNNING)
+
+
+def _skipped(key: str, reason: str) -> Section:
+    return Section(key, _TITLES[key], SectionStatus.SKIPPED, reason=reason)
+
+
+def _failed(key: str, error: Exception) -> Section:
+    return Section(
+        key, _TITLES[key], SectionStatus.FAILED, reason=f"{type(error).__name__}: {error}"
+    )
