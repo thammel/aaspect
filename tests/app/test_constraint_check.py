@@ -8,6 +8,7 @@ from aaspect.domain.constraints.violations import (
     ConstraintViolation,
     Place,
     RuleResult,
+    RuleStatus,
 )
 from aaspect.domain.corpus import ReadFailure
 from aaspect.domain.id_collisions import Occurrence
@@ -28,6 +29,7 @@ RESULT = ConstraintResult(
     (
         RuleResult("AASd-002", 1, (ConstraintViolation((Place("sm", 0, "x.y"),)),)),
         RuleResult("AASd-005", 0),
+        RuleResult("AASd-014", 0, status=RuleStatus.NOT_CHECKED),
     )
 )
 
@@ -40,10 +42,14 @@ class TestCheckConstraints(unittest.TestCase):
 
         self.assertEqual(graph.calls, [("constraints", V3_1)])
         self.assertEqual(section.status, SectionStatus.COMPLETED)
-        summary, per_rule, other, violation = section.blocks
+        summary, per_rule, other, violation, time_limit = section.blocks
+        assert isinstance(time_limit, Finding)
+        self.assertEqual(time_limit.rule_id, "analysis-time-limit")
         assert isinstance(summary, Table) and isinstance(per_rule, Table)
-        self.assertEqual(summary.rows, (("3.1", "most common in the corpus", 2, 1),))
-        self.assertEqual(per_rule.rows, (("AASd-002", 1), ("AASd-005", 0)))
+        self.assertEqual(summary.rows, (("3.1", "most common in the corpus", "2 of 3", 1),))
+        self.assertEqual(
+            per_rule.rows, (("AASd-002", 1), ("AASd-005", 0), ("AASd-014", "not checked"))
+        )
         assert isinstance(other, Finding) and isinstance(violation, Finding)
         self.assertEqual(
             (other.rule_id, other.severity, other.locations),

@@ -3,7 +3,12 @@ import unittest
 from aaspect.domain.blocks import Location, Severity
 from aaspect.domain.constraints.findings import violation_findings
 from aaspect.domain.constraints.rules import rule_text
-from aaspect.domain.constraints.violations import ConstraintViolation, Place, RuleResult
+from aaspect.domain.constraints.violations import (
+    ConstraintViolation,
+    Place,
+    RuleResult,
+    RuleStatus,
+)
 from aaspect.domain.id_collisions import Occurrence
 
 OCCURRENCES = {
@@ -70,6 +75,23 @@ class TestViolationFindings(unittest.TestCase):
         path = finding.locations[0].element_path
         assert path is not None
         self.assertEqual((len(path), path[-1]), (256, "…"))
+
+    def test_failed_and_unchecked_rules(self) -> None:
+        findings = violation_findings(
+            [
+                RuleResult("AASd-002", 0, status=RuleStatus.FAILED),
+                RuleResult("AASd-005", 0),
+                RuleResult("AASd-014", 0, status=RuleStatus.NOT_CHECKED),
+                RuleResult("AASd-021", 0, status=RuleStatus.NOT_CHECKED),
+            ],
+            OCCURRENCES,
+        )
+        self.assertEqual(
+            [(f.rule_id, f.severity) for f in findings],
+            [("AASd-002", Severity.WARNING), ("analysis-time-limit", Severity.WARNING)],
+        )
+        self.assertIn("not checked, the check failed", findings[0].message)
+        self.assertTrue(findings[1].message.endswith("AASd-014, AASd-021."))
 
     def test_unknown_rule_gets_a_generic_text(self) -> None:
         self.assertEqual(rule_text("AASd-999"), "AASd-999 is violated")

@@ -1,5 +1,5 @@
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from neo4aas.core.client import AAS_NEO4J_MODEL_CONFIG, AASNeo4JClient
 from neo4aas.core.utils import irdi_base
@@ -104,8 +104,10 @@ class Neo4aasGraph:
         self._client.execute_clause(_RESTORE_IDENTIFIABLES, params={"renames": rows})
         self._client.execute_clause(_RESTORE_REFERENCES, params={"renames": rows})
 
-    def check_constraints(self, version: MetamodelVersion) -> ConstraintResult:
-        return check_constraints(self._client, version)
+    def check_constraints(
+        self, version: MetamodelVersion, expired: Callable[[], bool]
+    ) -> ConstraintResult:
+        return check_constraints(self._client, version, expired)
 
 
 def _entries(environments: Sequence[Environment], key: str) -> list:

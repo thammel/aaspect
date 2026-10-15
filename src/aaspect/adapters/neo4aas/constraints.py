@@ -1,18 +1,23 @@
 """Run the neo4aas constraint checker and place each violation in its Identifiable."""
 
-from collections.abc import Iterable, Iterator, Sequence
+import logging
+from collections.abc import Callable, Iterable, Iterator, Sequence
 
 from neo4aas.core.client import AASNeo4JClient
 from neo4aas.core.validation import AASConstraintChecker
 from neo4aas.core.validation import ConstraintViolation as CheckerViolation
+from neo4j.exceptions import DriverError
 
 from aaspect.domain.constraints.violations import (
     ConstraintResult,
     ConstraintViolation,
     Place,
     RuleResult,
+    RuleStatus,
 )
 from aaspect.domain.metamodel import MetamodelVersion
+
+logger = logging.getLogger(__name__)
 
 # The detail naming the violating element, most specific first: a check on a list child
 # also names the list, one on a duplicate idShort only the parent holding both.
@@ -49,24 +54,30 @@ RETURN node_id, owner.id AS id, owner.collision_index AS collision_index, steps
 """
 
 
-def check_constraints(client: AASNeo4JClient, version: MetamodelVersion) -> ConstraintResult:
-    report = AASConstraintChecker(client, version.value).check_all()
-    found: dict[str, list[CheckerViolation]] = {rule: [] for rule in report.checked_constraints}
-    for violation in report.violations:
-        found[violation.constraint_id].append(violation)
-    listed = {rule: violations[:_MAX_LISTED] for rule, violations in found.items()}
-    nodes = {_node_id(v.details) for violations in listed.values() for v in violations}
-    places = _places(client, {node for node in nodes if node is not None})
-    return ConstraintResult(
-        tuple(
-            RuleResult(
-                rule,
-                len(found[rule]),
-                tuple(_located(violation, places) for violation in violations),
-            )
-            for rule, violations in listed.items()
-        )
-    )
+def check_constraints(
+    client: AASNeo4JClient, version: MetamodelVersion, expired: Callable[[], bool]
+) -> ConstraintResult:
+    checker = AASConstraintChecker(client, version.value)
+    rules = []
+    for rule in checker.constraint_ids:
+        if expired():
+            rules.append(RuleResult(rule, 0, status=RuleStatus.NOT_CHECKED))
+            continue
+        try:
+            found = checker.check([rule]).violations
+        except DriverError:
+            raise
+        except Exception:
+            # One rule tripping over unexpected content must not take the others down.
+            logger.warning("Constraint %s could not be checked", rule, exc_info=True)
+            rules.append(RuleResult(rule, 0, status=RuleStatus.FAILED))
+            continue
+        listed = found[:_MAX_LISTED]
+        nodes = {_node_id(violation.details) for violation in listed}
+        places = _places(client, {node for node in nodes if node is not None}, expired)
+        located = tuple(_located(violation, places) for violation in listed)
+        rules.append(RuleResult(rule, len(found), located))
+    return ConstraintResult(tuple(rules))
 
 
 def _located(violation: CheckerViolation, places: dict[str, list[Place]]) -> ConstraintViolation:
@@ -83,9 +94,14 @@ def _node_id(details: dict) -> str | None:
     return next((details[key] for key in _NODE_KEYS if isinstance(details.get(key), str)), None)
 
 
-def _places(client: AASNeo4JClient, node_ids: set[str]) -> dict[str, list[Place]]:
+def _places(
+    client: AASNeo4JClient, node_ids: set[str], expired: Callable[[], bool]
+) -> dict[str, list[Place]]:
+    """Places per node; nodes still waiting when `expired` turns true get none."""
     places: dict[str, list[Place]] = {}
     for batch in _batches(sorted(node_ids)):
+        if expired():
+            break
         # One more than kept, to tell a capped list from a complete one.
         params = {"node_ids": batch, "limit": _MAX_PLACES + 1}
         for record in client.execute_clause(_PLACES, params=params) or []:

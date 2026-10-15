@@ -1,6 +1,7 @@
 """Metamodel constraint violations as the graph reports them."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +25,14 @@ class ConstraintViolation:
     more_places: bool = False
 
 
+class RuleStatus(StrEnum):
+    CHECKED = "checked"
+    # The check itself failed, e.g. on content the checker did not expect.
+    FAILED = "failed"
+    # The analysis reached its time limit before this rule's turn.
+    NOT_CHECKED = "not checked"
+
+
 @dataclass(frozen=True, slots=True)
 class RuleResult:
     """What one rule found: `total` counts every violation, `violations` lists at most a
@@ -32,10 +41,11 @@ class RuleResult:
     rule_id: str
     total: int
     violations: tuple[ConstraintViolation, ...] = ()
+    status: RuleStatus = RuleStatus.CHECKED
 
 
 @dataclass(frozen=True, slots=True)
 class ConstraintResult:
-    """One result per checked rule, in check order."""
+    """One result per rule of the version, in check order."""
 
     rules: tuple[RuleResult, ...]

@@ -1,12 +1,17 @@
 import json
 import os
 import unittest
+from collections.abc import Callable
+from typing import cast
 
-from aaspect.adapters.neo4aas.constraints import _node_id, place_of
+from neo4aas.core.client import AASNeo4JClient
+from neo4j.exceptions import ServiceUnavailable
+
+from aaspect.adapters.neo4aas.constraints import _node_id, check_constraints, place_of
 from aaspect.adapters.neo4aas.parser import Neo4aasEnvironmentParser
 from aaspect.adapters.neo4aas.store import DozerDbStore
 from aaspect.app.import_corpus import import_corpus
-from aaspect.domain.constraints.violations import Place
+from aaspect.domain.constraints.violations import Place, RuleStatus
 from aaspect.domain.corpus import AasDocument, DocumentFormat
 from aaspect.domain.metamodel import MetamodelVersion
 
@@ -35,6 +40,53 @@ class TestPlaceOf(unittest.TestCase):
 
     def test_the_identifiable_itself(self) -> None:
         self.assertEqual(place_of("urn:sm", None, []), Place("urn:sm", 0, ""))
+
+
+class _Client:
+    """Answers every checker query with no rows, except the idShort query of AASd-002,
+    which gets a value the checker does not expect, or `error`."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+
+    def execute_clause(self, query: str, params: dict | None = None) -> list:
+        if "n.idShort AS id_short" in query:
+            if self.error:
+                raise self.error
+            return [{"node_id": "n", "node_labels": [], "id_short": 5}]
+        return []
+
+
+def _check(client: _Client, version: MetamodelVersion, expired: Callable[[], bool]):
+    return check_constraints(cast(AASNeo4JClient, client), version, expired)
+
+
+class TestRuleByRule(unittest.TestCase):
+    def test_a_failing_rule_does_not_stop_the_others(self) -> None:
+        with self.assertLogs("aaspect.adapters.neo4aas.constraints", "WARNING"):
+            result = _check(_Client(), MetamodelVersion.V3_1, lambda: False)
+        statuses = {rule.rule_id: rule.status for rule in result.rules}
+        self.assertEqual(statuses.pop("AASd-002"), RuleStatus.FAILED)
+        self.assertEqual(set(statuses.values()), {RuleStatus.CHECKED})
+
+    def test_a_lost_database_still_fails_the_step(self) -> None:
+        with self.assertRaises(ServiceUnavailable):
+            _check(
+                _Client(ServiceUnavailable("gone")),
+                MetamodelVersion.V3_1,
+                lambda: False,
+            )
+
+    def test_rules_after_the_time_limit_are_not_checked(self) -> None:
+        turns = iter([False, False])
+        result = _check(
+            _Client(),
+            MetamodelVersion.V3_2,
+            lambda: next(turns, True),
+        )
+        statuses = [rule.status for rule in result.rules]
+        self.assertEqual(statuses[:2], [RuleStatus.FAILED, RuleStatus.CHECKED])
+        self.assertEqual(set(statuses[2:]), {RuleStatus.NOT_CHECKED})
 
 
 def _property(id_short: str) -> dict:
@@ -76,7 +128,7 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         documents = [_document("a.json", "urn:sm", listed, twice, dict(twice))]
         import_corpus(documents, Neo4aasEnvironmentParser(), self.graph)
 
-        result = self.graph.check_constraints(MetamodelVersion.V3_1)
+        result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
 
         paths = {
             rule.rule_id: {p.element_path for v in rule.violations for p in v.places}
@@ -92,7 +144,7 @@ class TestConstraintsInNeo4j(unittest.TestCase):
             [_document("a.json", "urn:sm", number)], Neo4aasEnvironmentParser(), self.graph
         )
 
-        result = self.graph.check_constraints(MetamodelVersion.V3_1)
+        result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
 
         [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-002"]
         self.assertEqual(rule.violations[0].places, (Place("urn:sm", 0, "Group.123"),))
@@ -116,7 +168,7 @@ class TestConstraintsInNeo4j(unittest.TestCase):
             self.graph,
         )
 
-        result = self.graph.check_constraints(MetamodelVersion.V3_1)
+        result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
 
         [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-002"]
         self.assertEqual(
@@ -131,7 +183,7 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         ]
         import_corpus(documents, Neo4aasEnvironmentParser(), self.graph)
 
-        result = self.graph.check_constraints(MetamodelVersion.V3_1)
+        result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
 
         by_rule = {
             rule.rule_id: {place for violation in rule.violations for place in violation.places}

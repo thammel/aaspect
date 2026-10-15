@@ -6,6 +6,7 @@ from aaspect.app.import_corpus import ImportResult
 from aaspect.domain.blocks import Finding, Location, Severity, Table
 from aaspect.domain.constraints.corpus_version import CorpusVersion, corpus_version
 from aaspect.domain.constraints.findings import violation_findings
+from aaspect.domain.constraints.violations import ConstraintResult, RuleStatus
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Section, SectionStatus
 from aaspect.domain.version_selection import VersionChoice
@@ -35,19 +36,9 @@ def check_constraints(
     missing = {failure.source for failure in imported.not_imported}
     present = None if versions is None else [v for v in versions if v[0] not in missing]
     chosen = corpus_version(choice, present)
-    result = checker.check_constraints(chosen.version)
+    result = checker.check_constraints(chosen.version, expired)
     occurrences = {(o.original, o.index): o for o in imported.occurrences}
-    total = sum(rule.total for rule in result.rules)
-    summary = Table(
-        "Constraint check",
-        ("Metamodel version", "Determined by", "Constraints checked", "Violations"),
-        ((chosen.version.value, chosen.basis, len(result.rules), total),),
-    )
-    per_rule = Table(
-        "Violations per constraint",
-        ("Constraint", "Violations"),
-        tuple((rule.rule_id, rule.total) for rule in result.rules),
-    )
+    summary, per_rule = _tables(chosen, result)
     blocks = (
         summary,
         per_rule,
@@ -55,6 +46,31 @@ def check_constraints(
         *violation_findings(result.rules, occurrences),
     )
     return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, blocks)
+
+
+def _tables(chosen: CorpusVersion, result: ConstraintResult) -> tuple[Table, Table]:
+    checked = [rule for rule in result.rules if rule.status is RuleStatus.CHECKED]
+    summary = Table(
+        "Constraint check",
+        ("Metamodel version", "Determined by", "Constraints checked", "Violations"),
+        (
+            (
+                chosen.version.value,
+                chosen.basis,
+                f"{len(checked)} of {len(result.rules)}",
+                sum(rule.total for rule in checked),
+            ),
+        ),
+    )
+    per_rule = Table(
+        "Violations per constraint",
+        ("Constraint", "Violations"),
+        tuple(
+            (rule.rule_id, rule.total if rule.status is RuleStatus.CHECKED else rule.status.value)
+            for rule in result.rules
+        ),
+    )
+    return summary, per_rule
 
 
 def _other_versions(chosen: CorpusVersion) -> Iterator[Finding]:

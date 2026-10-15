@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 
 from aaspect.domain.blocks import Finding, Location, Severity
 from aaspect.domain.constraints.rules import rule_text
-from aaspect.domain.constraints.violations import Place, RuleResult
+from aaspect.domain.constraints.violations import Place, RuleResult, RuleStatus
 from aaspect.domain.id_collisions import Occurrence
 
 # Ids and idShorts come from the files and can be megabytes long.
@@ -16,10 +16,38 @@ _MAX_LOCATIONS = 1_000
 def violation_findings(
     rules: Iterable[RuleResult], occurrences: Mapping[tuple[str, int], Occurrence]
 ) -> tuple[Finding, ...]:
-    """One finding per rule with violations. An object found in many files is listed once,
-    with the first of its files; `occurrences` is keyed by original id and collision
-    index."""
-    return tuple(_finding(rule, occurrences) for rule in rules if rule.total)
+    """One finding per rule with violations, and per rule that was not checked. An object
+    found in many files is listed once, with the first of its files; `occurrences` is
+    keyed by original id and collision index."""
+    rules = list(rules)
+    unchecked = [rule.rule_id for rule in rules if rule.status is RuleStatus.NOT_CHECKED]
+    time_limit = (
+        Finding(
+            "analysis-time-limit",
+            Severity.WARNING,
+            "Not checked: the analysis reached its time limit. " + ", ".join(unchecked) + ".",
+        )
+        if unchecked
+        else None
+    )
+    return tuple(
+        finding
+        for finding in (
+            *(_finding(rule, occurrences) for rule in rules if rule.total),
+            *(_failed(rule) for rule in rules if rule.status is RuleStatus.FAILED),
+            time_limit,
+        )
+        if finding is not None
+    )
+
+
+def _failed(rule: RuleResult) -> Finding:
+    return Finding(
+        rule.rule_id,
+        Severity.WARNING,
+        f"{rule_text(rule.rule_id)}: not checked, the check failed on this corpus."
+        " The server log has the details.",
+    )
 
 
 def _finding(rule: RuleResult, occurrences: Mapping[tuple[str, int], Occurrence]) -> Finding:

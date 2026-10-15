@@ -1,5 +1,5 @@
 import copy
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 
 from aaspect.domain.constraints.violations import ConstraintResult
@@ -45,7 +45,9 @@ class RecordingGraph:
     def restore_ids(self, renames: Sequence[Rename]) -> None:
         self.calls.append(("restore", tuple(renames)))
 
-    def check_constraints(self, version: MetamodelVersion) -> ConstraintResult:
+    def check_constraints(
+        self, version: MetamodelVersion, expired: Callable[[], bool]
+    ) -> ConstraintResult:
         self.calls.append(("constraints", version))
         if isinstance(self.constraints, Exception):
             raise self.constraints
