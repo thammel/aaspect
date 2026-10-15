@@ -97,7 +97,7 @@ class DozerDbStore:
             if any(record["currentStatus"] == "online" for record in records):
                 return
             if time.monotonic() > deadline:
-                raise TimeoutError(f"database {name} did not come online")
+                raise ShownError("The graph database did not start in time; try again later.")
             time.sleep(_ONLINE_POLL_SECONDS)
 
     def _drop(self, name: str) -> None:

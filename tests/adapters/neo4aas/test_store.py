@@ -34,6 +34,16 @@ class TestUnreachableServer(unittest.TestCase):
         self.assertNotIn("127.0.0.1", str(raised.exception))
 
 
+class TestSlowStart(unittest.TestCase):
+    def test_is_reported_without_the_database_name(self) -> None:
+        store = DozerDbStore("bolt://127.0.0.1:9", "neo4j", "unused", online_timeout_seconds=0)
+        self.addCleanup(store.close)
+        store._system = lambda *_, **__: [{"currentStatus": "starting"}]  # type: ignore[method-assign]
+        with self.assertRaises(ShownError) as raised:
+            store._wait_until_online(PREFIX + "x")
+        self.assertNotIn(PREFIX, str(raised.exception))
+
+
 @unittest.skipUnless(_URI, "set AASPECT_TEST_NEO4J_URI to run against a DozerDB server")
 class TestDozerDbStore(unittest.TestCase):
     def setUp(self) -> None:
