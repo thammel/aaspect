@@ -3,7 +3,7 @@ import unittest
 from aaspect.app.analyze_corpus import AnalyzeCorpus
 from aaspect.domain.blocks import Table
 from aaspect.domain.corpus import AasDocument, Corpus, DocumentFormat, Upload
-from aaspect.domain.report import SectionStatus
+from aaspect.domain.report import SectionStatus, ShownError
 from aaspect.domain.version_selection import AutoOrder
 from tests.app.fakes import BrokenValidator, FakeReader, FakeValidator
 from tests.app.graph_fakes import BrokenStore, FakeParser, FakeStore, RecordingGraph
@@ -25,7 +25,9 @@ class TestAnalyzeCorpus(unittest.TestCase):
         report = AnalyzeCorpus(FakeReader(CORPUS), BrokenValidator(), "0.1.0").run(UPLOADS, AUTO)
         section = report.sections[0]
         self.assertEqual(section.status, SectionStatus.FAILED)
-        self.assertEqual(section.reason, "RuntimeError: schema failed to load")
+        self.assertEqual(
+            section.reason, "Internal error (RuntimeError); the server log has the details."
+        )
 
     def test_time_limit_reaches_the_schema_check(self) -> None:
         analyze = AnalyzeCorpus(
@@ -66,8 +68,24 @@ class TestAnalyzeCorpus(unittest.TestCase):
         )
         report = analyze.run(UPLOADS, AUTO)
         self.assertEqual(report.sections[0].status, SectionStatus.COMPLETED)
-        self.assertEqual(report.sections[1].reason, "ConnectionError: database unreachable")
+        self.assertEqual(
+            report.sections[1].reason,
+            "Internal error (ConnectionError); the server log has the details.",
+        )
         self.assertEqual(report.sections[2].reason, "The graph import failed.")
+
+    def test_only_errors_written_for_the_report_show_their_text(self) -> None:
+        graph = RecordingGraph(ShownError("The graph database failed."))
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            FakeValidator({}),
+            "0.1.0",
+            graph_store=FakeStore(graph),
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+        with self.assertNoLogs("aaspect.app.analyze_corpus"):
+            report = analyze.run(UPLOADS, AUTO)
+        self.assertEqual(report.sections[2].reason, "The graph database failed.")
 
     def test_failed_schema_check_is_named_in_the_constraint_check(self) -> None:
         analyze = AnalyzeCorpus(
@@ -94,7 +112,10 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertEqual(
             [s.status for s in report.sections[1:]], [SectionStatus.COMPLETED, SectionStatus.FAILED]
         )
-        self.assertEqual(report.sections[2].reason, "RuntimeError: checker broke")
+        self.assertEqual(
+            report.sections[2].reason,
+            "Internal error (RuntimeError); the server log has the details.",
+        )
         self.assertTrue(store.closed)
 
     def test_progress_shows_each_step_starting_and_finishing(self) -> None:

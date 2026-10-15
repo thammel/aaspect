@@ -6,6 +6,11 @@ from enum import StrEnum
 from aaspect.domain.blocks import Block
 
 
+class ShownError(Exception):
+    """A failure whose message is written for the report. Reports are public, so the text
+    of any other error, which may name hosts or addresses, stays in the server log."""
+
+
 class SectionStatus(StrEnum):
     WAITING = "waiting"
     RUNNING = "running"

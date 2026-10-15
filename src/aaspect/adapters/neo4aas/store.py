@@ -11,6 +11,7 @@ from neo4j import GraphDatabase, Record
 from neo4j.exceptions import DriverError, Neo4jError
 
 from aaspect.adapters.neo4aas.graph import MODEL_CONFIG, Neo4aasGraph
+from aaspect.domain.report import ShownError
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class DozerDbStore:
         except (DriverError, Neo4jError) as error:
             # Driver messages name internal hosts and addresses; reports are public.
             logger.warning("Graph database failed", exc_info=True)
-            raise RuntimeError(_FAILED) from error
+            raise ShownError(_FAILED) from error
 
     @contextmanager
     def _database(self) -> Generator[str]:

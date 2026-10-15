@@ -5,6 +5,7 @@ import unittest
 from neo4j.exceptions import Neo4jError, ServiceUnavailable
 
 from aaspect.adapters.neo4aas.store import PREFIX, DozerDbStore, _checked
+from aaspect.domain.report import ShownError
 
 _URI = os.environ.get("AASPECT_TEST_NEO4J_URI")
 _PASSWORD = os.environ.get("AASPECT_TEST_NEO4J_PASSWORD", "")
@@ -26,7 +27,7 @@ class TestUnreachableServer(unittest.TestCase):
         store = DozerDbStore("bolt://127.0.0.1:9", "neo4j", "unused")
         self.addCleanup(store.close)
         started = time.monotonic()
-        with self.assertRaises(RuntimeError) as raised, store.open():
+        with self.assertRaises(ShownError) as raised, store.open():
             pass
         self.assertLess(time.monotonic() - started, 5)
         self.assertIsInstance(raised.exception.__cause__, ServiceUnavailable)
@@ -63,7 +64,7 @@ class TestDozerDbStore(unittest.TestCase):
 
     def test_database_errors_in_use_are_wrapped_without_details(self) -> None:
         before = self._databases()
-        with self.assertRaises(RuntimeError) as raised, self.store.open() as graph:
+        with self.assertRaises(ShownError) as raised, self.store.open() as graph:
             graph._client.execute_clause("THIS IS NOT CYPHER")
         self.assertIsInstance(raised.exception.__cause__, Neo4jError)
         self.assertNotIn("CYPHER", str(raised.exception))

@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Callable, Sequence
 
@@ -6,12 +7,14 @@ from aaspect.app.import_corpus import import_corpus
 from aaspect.app.schema_check import SchemaCheckResult
 from aaspect.domain.corpus import Corpus, Upload
 from aaspect.domain.metamodel import MetamodelVersion
-from aaspect.domain.report import Report, Section, SectionStatus
+from aaspect.domain.report import Report, Section, SectionStatus, ShownError
 from aaspect.domain.version_selection import VersionChoice
 from aaspect.ports.corpus_reader import CorpusReader
 from aaspect.ports.environment_parser import EnvironmentParser
 from aaspect.ports.graph_store import GraphStore
 from aaspect.ports.schema_validator import SchemaValidator
+
+logger = logging.getLogger(__name__)
 
 type Progress = Callable[[Report], None]
 type Publish = Callable[[str, Section], Report]
@@ -140,6 +143,9 @@ def _skipped(key: str, reason: str) -> Section:
 
 
 def _failed(key: str, error: Exception) -> Section:
-    return Section(
-        key, _TITLES[key], SectionStatus.FAILED, reason=f"{type(error).__name__}: {error}"
-    )
+    if isinstance(error, ShownError):
+        reason = str(error)
+    else:
+        logger.error("%s failed", _TITLES[key], exc_info=error)
+        reason = f"Internal error ({type(error).__name__}); the server log has the details."
+    return Section(key, _TITLES[key], SectionStatus.FAILED, reason=reason)
