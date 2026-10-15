@@ -1,5 +1,7 @@
 import dataclasses
+import json
 from collections.abc import Callable, Sequence
+from typing import Any
 
 from neo4aas.core.client import AAS_NEO4J_MODEL_CONFIG, AASNeo4JClient
 from neo4aas.core.utils import irdi_base
@@ -65,6 +67,7 @@ class Neo4aasGraph:
         # neo4aas reads only the three Identifiable lists, so joining them is the same as
         # uploading each environment. One call is one transaction.
         merged = {key: _entries(environments, key) for key in _IDENTIFIABLE_LISTS}
+        _id_shorts_as_text(merged)
         try:
             self._client.upload_json(merged)
         except Neo4jError as error:
@@ -108,6 +111,24 @@ class Neo4aasGraph:
         self, version: MetamodelVersion, expired: Callable[[], bool]
     ) -> ConstraintResult:
         return check_constraints(self._client, version, expired)
+
+
+def _id_shorts_as_text(environment: Environment) -> None:
+    """neo4aas's AASd-002 check matches every idShort with a regular expression and fails
+    on anything but text, ending the check for the whole corpus. The schema check reports
+    the wrong type; as text, the value is still checked against the pattern. Done at
+    upload, after the id scan, so that `1` and `"1"` still count as different content."""
+    # Iterative: uploaded documents can nest deeper than Python's recursion limit.
+    pending: list[Any] = [environment]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, dict):
+            id_short = item.get("idShort")
+            if id_short is not None and not isinstance(id_short, str):
+                item["idShort"] = json.dumps(id_short, ensure_ascii=False)
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
 
 
 def _entries(environments: Sequence[Environment], key: str) -> list:

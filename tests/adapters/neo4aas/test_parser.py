@@ -20,14 +20,9 @@ class TestParse(unittest.TestCase):
     def test_json_with_byte_order_mark(self) -> None:
         self.assertEqual(_parse(b'\xef\xbb\xbf{"submodels": []}'), {"submodels": []})
 
-    def test_id_shorts_that_are_not_text_become_text(self) -> None:
-        content = b"""{"submodels": [{"idShort": 123, "submodelElements": [
-            {"idShort": ["a"]}, {"idShort": "ok"}, {"value": [{"idShort": null}]}]}]}"""
-        submodel = _parse(content)["submodels"][0]
-        self.assertEqual(submodel["idShort"], "123")
-        elements = submodel["submodelElements"]
-        self.assertEqual([e.get("idShort") for e in elements[:2]], ['["a"]', "ok"])
-        self.assertIsNone(elements[2]["value"][0]["idShort"])
+    def test_values_are_kept_as_written(self) -> None:
+        # The id scan compares contents as written: idShort 1 and "1" differ.
+        self.assertEqual(_parse(b'{"submodels": [{"idShort": 1}]}')["submodels"][0]["idShort"], 1)
 
     def test_xml_arrives_in_json_structure(self) -> None:
         environment = _parse(_XML, DocumentFormat.XML)

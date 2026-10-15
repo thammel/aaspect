@@ -63,6 +63,32 @@ def _upload_with(code: str, message: str = "") -> Exception | None:
     return None
 
 
+class _Recording:
+    def upload_json(self, environment: dict) -> None:
+        self.uploaded = environment
+
+
+class TestIdShortsAsText(unittest.TestCase):
+    def test_id_shorts_that_are_not_text_become_text(self) -> None:
+        client = _Recording()
+        submodel = {
+            "id": "urn:x",
+            "idShort": 123,
+            "submodelElements": [
+                {"idShort": ["a"]},
+                {"idShort": "ok"},
+                {"value": [{"idShort": None}]},
+            ],
+        }
+        Neo4aasGraph(client).upload([{"submodels": [submodel]}])  # type: ignore[arg-type]
+
+        [stored] = client.uploaded["submodels"]
+        self.assertEqual(stored["idShort"], "123")
+        elements = stored["submodelElements"]
+        self.assertEqual([e.get("idShort") for e in elements[:2]], ['["a"]', "ok"])
+        self.assertIsNone(elements[2]["value"][0]["idShort"])
+
+
 class TestServerErrors(unittest.TestCase):
     def test_refused_content_and_oversized_documents_are_the_documents_fault(self) -> None:
         for code, message in (
