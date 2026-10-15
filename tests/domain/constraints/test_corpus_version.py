@@ -31,6 +31,11 @@ class TestCorpusVersion(unittest.TestCase):
         self.assertEqual(result.version, V3_2)
         self.assertEqual(result.others, (("a", None),))
 
+    def test_failed_schema_check_is_named(self) -> None:
+        result = corpus_version(AUTO, None)
+        self.assertEqual(result, CorpusVersion(V3_2, "schema check failed, newest used", ()))
+        self.assertEqual(corpus_version(V3_0, None).basis, "chosen by user")
+
     def test_empty_corpus(self) -> None:
         self.assertEqual(corpus_version(AUTO, []).others, ())
 

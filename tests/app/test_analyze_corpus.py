@@ -1,6 +1,7 @@
 import unittest
 
 from aaspect.app.analyze_corpus import AnalyzeCorpus
+from aaspect.domain.blocks import Table
 from aaspect.domain.corpus import AasDocument, Corpus, DocumentFormat, Upload
 from aaspect.domain.report import SectionStatus
 from aaspect.domain.version_selection import AutoOrder
@@ -67,6 +68,18 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertEqual(report.sections[0].status, SectionStatus.COMPLETED)
         self.assertEqual(report.sections[1].reason, "ConnectionError: database unreachable")
         self.assertEqual(report.sections[2].reason, "The graph import failed.")
+
+    def test_failed_schema_check_is_named_in_the_constraint_check(self) -> None:
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            BrokenValidator(),
+            "0.1.0",
+            graph_store=FakeStore(),
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+        summary = analyze.run(UPLOADS, AUTO).sections[2].blocks[0]
+        assert isinstance(summary, Table)
+        self.assertEqual(summary.rows[0][1], "schema check failed, newest used")
 
     def test_failing_constraint_check_keeps_the_import(self) -> None:
         store = FakeStore(RecordingGraph(RuntimeError("checker broke")))

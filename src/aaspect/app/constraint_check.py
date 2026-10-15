@@ -19,11 +19,12 @@ def check_constraints(
     checker: ConstraintChecker,
     imported: ImportResult,
     choice: VersionChoice,
-    versions: Sequence[tuple[str, MetamodelVersion | None]],
+    versions: Sequence[tuple[str, MetamodelVersion | None]] | None,
     expired: Callable[[], bool] = lambda: False,
 ) -> Section:
-    """`versions` holds each document's label and the version the schema check found;
-    only documents in the graph count toward the version used."""
+    """`versions` holds each document's label and the version the schema check found,
+    None if the schema check failed; only documents in the graph count toward the version
+    used."""
     if expired():
         return Section(
             SECTION_KEY,
@@ -32,7 +33,8 @@ def check_constraints(
             reason="The analysis reached its time limit.",
         )
     missing = {failure.source for failure in imported.not_imported}
-    chosen = corpus_version(choice, [entry for entry in versions if entry[0] not in missing])
+    present = None if versions is None else [v for v in versions if v[0] not in missing]
+    chosen = corpus_version(choice, present)
     result = checker.check_constraints(chosen.version)
     occurrences = {(o.original, o.index): o for o in imported.occurrences}
     total = sum(rule.total for rule in result.rules)

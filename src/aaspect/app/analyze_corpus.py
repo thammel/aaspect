@@ -78,7 +78,11 @@ class AnalyzeCorpus:
             return publish(_SCHEMA, schema.section)
         sections[_SCHEMA] = schema.section
         publish(_GRAPH, _running(_GRAPH))
-        versions = [(document.label, outcome.version) for document, outcome in schema.outcomes]
+        versions = (
+            None
+            if schema.section.status is SectionStatus.FAILED
+            else [(document.label, outcome.version) for document, outcome in schema.outcomes]
+        )
         return self._graph_steps(corpus, version_choice, versions, expired, publish)
 
     def _check_schema(
@@ -103,7 +107,7 @@ class AnalyzeCorpus:
         self,
         corpus: Corpus,
         choice: VersionChoice,
-        versions: list[tuple[str, MetamodelVersion | None]],
+        versions: list[tuple[str, MetamodelVersion | None]] | None,
         expired: Callable[[], bool],
         publish: Publish,
     ) -> Report:

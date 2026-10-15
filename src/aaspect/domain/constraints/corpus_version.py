@@ -24,13 +24,16 @@ class CorpusVersion:
 
 
 def corpus_version(
-    choice: VersionChoice, versions: Sequence[tuple[str, MetamodelVersion | None]]
+    choice: VersionChoice, versions: Sequence[tuple[str, MetamodelVersion | None]] | None
 ) -> CorpusVersion:
     """The chosen version, else the most common one among `versions` (document label and
     the version it was determined as); on a tie the older one, which auto mode also
-    prefers. With no version determined at all, the newest."""
+    prefers. With no version determined at all, the newest. `versions` is None when the
+    schema check could not determine any."""
     if isinstance(choice, MetamodelVersion):
         version, basis = choice, "chosen by user"
+    elif versions is None:
+        version, basis = NEWEST_FIRST[0], "schema check failed, newest used"
     else:
         counts = Counter(version for _, version in versions if version is not None)
         if counts:
@@ -38,5 +41,5 @@ def corpus_version(
             basis = "most common in the corpus"
         else:
             version, basis = NEWEST_FIRST[0], "no version determined, newest used"
-    others = tuple((label, found) for label, found in versions if found is not version)
+    others = tuple((label, found) for label, found in versions or () if found is not version)
     return CorpusVersion(version, basis, others)
