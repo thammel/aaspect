@@ -1,3 +1,4 @@
+import math
 from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from typing import Protocol
@@ -35,6 +36,8 @@ class AnalysisGraph(CorpusGraph, ConstraintChecker, Protocol):
 
 
 class GraphStore(Protocol):
-    def open(self) -> AbstractContextManager[AnalysisGraph]:
-        """A new, empty graph of its own, deleted when the context exits."""
+    def open(self, seconds: float = math.inf) -> AbstractContextManager[AnalysisGraph]:
+        """A new, empty graph of its own, deleted when the context exits. Queries still
+        running `seconds` from now are cancelled, and the error they raise names the
+        time limit."""
         ...

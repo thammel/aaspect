@@ -1,10 +1,14 @@
+import math
 import os
+import threading
 import time
 import unittest
+from unittest import mock
 
 from neo4j.exceptions import Neo4jError, ServiceUnavailable
 
-from aaspect.adapters.neo4aas.store import PREFIX, DozerDbStore, _checked
+from aaspect.adapters.neo4aas import store as store_module
+from aaspect.adapters.neo4aas.store import PREFIX, DozerDbStore, _checked, _Watchdog
 from aaspect.domain.report import ShownError
 
 _URI = os.environ.get("AASPECT_TEST_NEO4J_URI")
@@ -34,6 +38,26 @@ class TestUnreachableServer(unittest.TestCase):
         self.assertNotIn("127.0.0.1", str(raised.exception))
 
 
+class TestWatchdog(unittest.TestCase):
+    def test_cancels_until_stopped_once_the_time_is_up(self) -> None:
+        cancelled = threading.Event()
+        watchdog = _Watchdog(cancelled.set, 0.01)
+        self.assertTrue(cancelled.wait(5))
+        watchdog.stop()
+        self.assertTrue(watchdog.fired)
+
+    def test_stopped_in_time_it_never_cancels(self) -> None:
+        cancelled = threading.Event()
+        watchdog = _Watchdog(cancelled.set, 60)
+        watchdog.stop()
+        self.assertFalse(cancelled.is_set() or watchdog.fired)
+
+    def test_without_a_limit_nothing_runs(self) -> None:
+        watchdog = _Watchdog(lambda: None, math.inf)
+        self.assertFalse(watchdog._thread.is_alive())
+        watchdog.stop()
+
+
 class TestSlowStart(unittest.TestCase):
     def test_is_reported_without_the_database_name(self) -> None:
         store = DozerDbStore("bolt://127.0.0.1:9", "neo4j", "unused", online_timeout_seconds=0)
@@ -56,6 +80,18 @@ class TestDozerDbStore(unittest.TestCase):
             "SHOW DATABASES YIELD name WHERE name STARTS WITH $prefix RETURN name", prefix=PREFIX
         )
         return {record["name"] for record in records}
+
+    def test_a_query_past_the_time_limit_is_cancelled(self) -> None:
+        slow = "UNWIND range(1, 2000000000) AS x WITH x WHERE x < 0 RETURN count(*)"
+        started = time.monotonic()
+        with (
+            mock.patch.object(store_module, "_GRACE_SECONDS", 0),
+            self.assertRaises(ShownError) as raised,
+            self.store.open(1) as graph,
+        ):
+            graph._client.execute_clause(slow)
+        self.assertLess(time.monotonic() - started, 30)
+        self.assertIn("time limit", str(raised.exception))
 
     def test_database_exists_only_while_open(self) -> None:
         before = self._databases()

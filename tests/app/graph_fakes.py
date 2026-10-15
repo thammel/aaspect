@@ -1,4 +1,5 @@
 import copy
+import math
 from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 
@@ -57,10 +58,12 @@ class RecordingGraph:
 class FakeStore:
     def __init__(self, graph: RecordingGraph | None = None) -> None:
         self.graph = graph or RecordingGraph()
+        self.seconds: float | None = None
         self.closed = False
 
     @contextmanager
-    def open(self) -> Generator[RecordingGraph]:
+    def open(self, seconds: float = math.inf) -> Generator[RecordingGraph]:
+        self.seconds = seconds
         try:
             yield self.graph
         finally:
@@ -71,13 +74,13 @@ class FailingCleanupStore(FakeStore):
     """Works until the graph is closed, which fails, as a database drop can."""
 
     @contextmanager
-    def open(self) -> Generator[RecordingGraph]:
+    def open(self, seconds: float = math.inf) -> Generator[RecordingGraph]:
         yield self.graph
         raise ConnectionError("drop failed")
 
 
 class BrokenStore:
     @contextmanager
-    def open(self) -> Generator[RecordingGraph]:
+    def open(self, seconds: float = math.inf) -> Generator[RecordingGraph]:
         raise ConnectionError("database unreachable")
         yield RecordingGraph()

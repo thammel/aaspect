@@ -118,6 +118,20 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertIn("ValueError", logs.output[0])
         self.assertNotIn(quoted, "".join(logs.output))
 
+    def test_the_graph_gets_the_time_left(self) -> None:
+        store = FakeStore()
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            FakeValidator({}),
+            "0.1.0",
+            time_limit_seconds=60,
+            graph_store=store,
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+        analyze.run(UPLOADS, AUTO)
+        assert store.seconds is not None
+        self.assertTrue(0 < store.seconds <= 60)
+
     def test_failed_cleanup_keeps_the_finished_check(self) -> None:
         analyze = AnalyzeCorpus(
             FakeReader(CORPUS),

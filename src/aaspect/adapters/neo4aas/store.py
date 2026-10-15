@@ -1,8 +1,10 @@
 import logging
+import math
 import re
+import threading
 import time
 import uuid
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import LiteralString, cast
 
@@ -22,6 +24,39 @@ PREFIX = "aaspect-"
 _DATABASE_NAME = re.compile(r"[a-z][a-z0-9.-]{2,62}")
 _ONLINE_POLL_SECONDS = 0.2
 _FAILED = "The graph database failed; the server log has the details."
+_CANCELLED = "The analysis reached its time limit while the graph database was busy."
+# A step that passes the deadline normally ends at the next check of it; the watchdog is
+# for single queries that would otherwise run on, up to the server's own timeout.
+_GRACE_SECONDS = 5
+_CANCEL_EVERY_SECONDS = 1
+
+
+class _Watchdog:
+    """Cancels every query of one database once its time is up, and keeps cancelling the
+    ones started after that until stopped."""
+
+    def __init__(self, cancel: Callable[[], None], seconds: float, grace: float = 0) -> None:
+        self.fired = False
+        self._grace = grace
+        self._cancel = cancel
+        self._stopped = threading.Event()
+        self._thread = threading.Thread(target=self._run, args=(seconds,), daemon=True)
+        if math.isfinite(seconds):
+            self._thread.start()
+
+    def _run(self, seconds: float) -> None:
+        if self._stopped.wait(max(seconds, 0) + self._grace):
+            return
+        self.fired = True
+        while True:
+            self._cancel()
+            if self._stopped.wait(_CANCEL_EVERY_SECONDS):
+                return
+
+    def stop(self) -> None:
+        self._stopped.set()
+        if self._thread.is_alive():
+            self._thread.join()
 
 
 class DozerDbStore:
@@ -38,9 +73,11 @@ class DozerDbStore:
         self._driver.close()
 
     @contextmanager
-    def open(self) -> Generator[Neo4aasGraph]:
+    def open(self, seconds: float = math.inf) -> Generator[Neo4aasGraph]:
+        watchdog = None
         try:
             with self._database() as name:
+                watchdog = _Watchdog(lambda: self._cancel_queries(name), seconds, _GRACE_SECONDS)
                 # Schema is created afterwards, so that a failure there still closes the
                 # client's own driver.
                 client = AASNeo4JClient(
@@ -55,8 +92,11 @@ class DozerDbStore:
                     client.optimize_database()
                     yield Neo4aasGraph(client)
                 finally:
+                    watchdog.stop()
                     client.driver.close()
         except (DriverError, Neo4jError) as error:
+            if watchdog is not None and watchdog.fired:
+                raise ShownError(_CANCELLED) from error
             # Driver messages name internal hosts and addresses; reports are public.
             if isinstance(error, DriverError):
                 logger.warning("Graph database failed", exc_info=True)
@@ -90,6 +130,22 @@ class DozerDbStore:
             return
         for record in records:
             self._drop(record["name"])
+
+    def _cancel_queries(self, name: str) -> None:
+        try:
+            records = self._system(
+                "SHOW TRANSACTIONS YIELD transactionId, database WHERE database = $name"
+                " RETURN collect(transactionId) AS ids",
+                name=name,
+            )
+            ids = records[0]["ids"] if records else []
+            if ids:
+                self._driver.execute_query(
+                    "TERMINATE TRANSACTIONS $ids", {"ids": ids}, database_="system"
+                )
+        except Exception:
+            # The next round tries again; the database is dropped at the end regardless.
+            logger.warning("Could not cancel the queries of %s", name, exc_info=True)
 
     def _wait_until_online(self, name: str) -> None:
         # DozerDB rejects CREATE DATABASE ... WAIT.

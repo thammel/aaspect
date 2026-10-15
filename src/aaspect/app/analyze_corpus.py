@@ -62,8 +62,11 @@ class AnalyzeCorpus:
         # busy for hours. The limit covers all steps together.
         deadline = time.monotonic() + self._time_limit
 
+        def seconds_left() -> float:
+            return deadline - time.monotonic()
+
         def expired() -> bool:
-            return time.monotonic() > deadline
+            return seconds_left() < 0
 
         files = tuple(upload.name for upload in uploads)
         sections = {key: self._waiting(key) for key in _TITLES}
@@ -87,7 +90,7 @@ class AnalyzeCorpus:
             if schema.section.status is SectionStatus.FAILED
             else [(document.label, outcome.version) for document, outcome in schema.outcomes]
         )
-        return self._graph_steps(corpus, version_choice, versions, expired, publish)
+        return self._graph_steps(corpus, version_choice, versions, seconds_left, publish)
 
     def _check_schema(
         self,
@@ -112,14 +115,18 @@ class AnalyzeCorpus:
         corpus: Corpus,
         choice: VersionChoice,
         versions: list[tuple[str, MetamodelVersion | None]] | None,
-        expired: Callable[[], bool],
+        seconds_left: Callable[[], float],
         publish: Publish,
     ) -> Report:
         """Import, then check, in one graph that is dropped afterward."""
         assert self._graph_store is not None and self._parser is not None
+
+        def expired() -> bool:
+            return seconds_left() < 0
+
         imported = checked = None
         try:
-            with self._graph_store.open() as graph:
+            with self._graph_store.open(seconds_left()) as graph:
                 imported = import_corpus(corpus.documents, self._parser, graph, expired)
                 publish(_GRAPH, graph_import_section.import_section(imported))
                 publish(_CONSTRAINTS, _running(_CONSTRAINTS))
