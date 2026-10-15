@@ -1,6 +1,6 @@
 """Where a violating node sits: the stored objects holding it, and the path inside them."""
 
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 
 from neo4aas.core.client import AASNeo4JClient
 
@@ -53,14 +53,10 @@ def find_places(
     client: AASNeo4JClient,
     node_ids: Iterable[str],
     occurrences: Sequence[Occurrence],
-    expired: Callable[[], bool],
 ) -> dict[str, list[Place]]:
-    """Up to `MAX_PLACES` + 1 places per node, to tell a capped list from a complete one.
-    Nodes still waiting when `expired` turns true get none."""
+    """Up to `MAX_PLACES` + 1 places per node, to tell a capped list from a complete one."""
     places: dict[str, list[Place]] = {}
     for batch in _batches(sorted(set(node_ids))):
-        if expired():
-            break
         params = {
             "node_ids": batch,
             "limit": MAX_PLACES + 1,

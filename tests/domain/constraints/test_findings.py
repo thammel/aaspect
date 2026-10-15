@@ -26,7 +26,12 @@ class TestViolationFindings(unittest.TestCase):
     def test_one_finding_per_rule_with_violations(self) -> None:
         findings = violation_findings(
             [
-                RuleResult("AASd-002", 3, (_at(Place("sm", 0, "a")), _at(Place("sm", 0, "b")))),
+                RuleResult(
+                    "AASd-002",
+                    3,
+                    (_at(Place("sm", 0, "a")), _at(Place("sm", 0, "b"))),
+                    truncated=True,
+                ),
                 RuleResult("AASd-005", 0),
                 RuleResult("AASd-117", 1, (_at(Place("sm", 0, "")),)),
             ],
@@ -92,6 +97,28 @@ class TestViolationFindings(unittest.TestCase):
         )
         self.assertIn("not checked, the check failed", findings[0].message)
         self.assertTrue(findings[1].message.endswith("AASd-014, AASd-021."))
+
+    def test_a_shared_reference_listed_in_full_is_not_called_cut(self) -> None:
+        places = (Place("sm", 0, "a"), Place("sm", 0, "b"), Place("sm", 0, "c"))
+        [finding] = violation_findings([RuleResult("AASd-122", 3, (_at(*places),))], OCCURRENCES)
+        self.assertNotIn("Not every location", finding.message)
+        [cut] = violation_findings(
+            [RuleResult("AASd-122", 3, (_at(*places),), truncated=True)], OCCURRENCES
+        )
+        self.assertIn("Not every location is listed.", cut.message)
+
+    def test_incomplete_lookups_name_their_cause(self) -> None:
+        unplaced = (_at(),)
+        late, refused = violation_findings(
+            [
+                RuleResult("AASd-002", 1, unplaced, located=RuleStatus.NOT_CHECKED),
+                RuleResult("AASd-117", 1, (), located=RuleStatus.FAILED),
+            ],
+            OCCURRENCES,
+        )
+        self.assertIn("reached its time limit", late.message)
+        self.assertNotIn("without a location", late.message)
+        self.assertIn("database refused the lookup", refused.message)
 
     def test_unknown_rule_gets_a_generic_text(self) -> None:
         self.assertEqual(rule_text("AASd-999"), "AASd-999 is violated")

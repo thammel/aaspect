@@ -6,9 +6,10 @@ from collections.abc import Callable, Sequence
 from neo4aas.core.client import AASNeo4JClient
 from neo4aas.core.validation import AASConstraintChecker
 from neo4aas.core.validation import ConstraintViolation as CheckerViolation
-from neo4j.exceptions import DriverError
+from neo4j.exceptions import DriverError, Neo4jError
 
 from aaspect.adapters.neo4aas.counts import count_affected
+from aaspect.adapters.neo4aas.errors import content_fault
 from aaspect.adapters.neo4aas.places import MAX_PLACES, below, find_places
 from aaspect.domain.constraints.violations import (
     ConstraintResult,
@@ -49,21 +50,41 @@ def check_constraints(
     for rule in checker.constraint_ids:
         if expired():
             rules.append(RuleResult(rule, 0, status=RuleStatus.NOT_CHECKED))
-            continue
-        try:
-            found = checker.check([rule]).violations
-        except DriverError:
-            raise
-        except Exception:
-            # One rule tripping over unexpected content must not take the others down.
-            logger.warning("Constraint %s could not be checked", rule, exc_info=True)
-            rules.append(RuleResult(rule, 0, status=RuleStatus.FAILED))
-            continue
-        located = _locate(client, found, occurrences, expired)
-        nodes = [_node_id(violation.details) for violation in found]
-        affected = count_affected(client, nodes, expired)
-        rules.append(RuleResult(rule, affected, located))
+        else:
+            rules.append(_check_rule(checker, client, rule, occurrences, expired))
     return ConstraintResult(tuple(rules))
+
+
+def _check_rule(
+    checker: AASConstraintChecker,
+    client: AASNeo4JClient,
+    rule: str,
+    occurrences: Sequence[Occurrence],
+    expired: Callable[[], bool],
+) -> RuleResult:
+    try:
+        found = checker.check([rule]).violations
+    except DriverError:
+        raise
+    except Exception as error:
+        # A rule tripping over unexpected content must not take the others down; the
+        # server running short or a broken query must fail the step instead.
+        if isinstance(error, Neo4jError) and content_fault(error) is None:
+            raise
+        logger.warning("Constraint %s could not be checked", rule, exc_info=True)
+        return RuleResult(rule, 0, status=RuleStatus.FAILED)
+    try:
+        located, complete = _locate(client, found, occurrences, expired)
+        nodes = [_node_id(violation.details) for violation in found]
+        affected, counted = count_affected(client, nodes, expired)
+    except Neo4jError as error:
+        if content_fault(error) is None:
+            raise
+        logger.warning("Constraint %s could not be located", rule, exc_info=True)
+        return RuleResult(rule, len(found), located=RuleStatus.FAILED)
+    status = RuleStatus.CHECKED if complete and counted else RuleStatus.NOT_CHECKED
+    truncated = complete and len(located) < len(found)
+    return RuleResult(rule, affected, located, truncated=truncated, located=status)
 
 
 def _locate(
@@ -71,20 +92,23 @@ def _locate(
     found: Sequence[CheckerViolation],
     occurrences: Sequence[Occurrence],
     expired: Callable[[], bool],
-) -> tuple[ConstraintViolation, ...]:
-    """The first violations with their places, until `_MAX_LOCATED` places are kept."""
+) -> tuple[tuple[ConstraintViolation, ...], bool]:
+    """The first violations with their places, until `_MAX_LOCATED` places are kept, and
+    False if the time limit stopped the lookup before that."""
     located: list[ConstraintViolation] = []
     kept = 0
     for start in range(0, len(found), _CHUNK):
         if kept >= _MAX_LOCATED:
             break
+        if expired():
+            return tuple(located), False
         chunk = found[start : start + _CHUNK]
         nodes = {node for node in map(_node_id, (v.details for v in chunk)) if node}
-        places = find_places(client, nodes, occurrences, expired)
+        places = find_places(client, nodes, occurrences)
         for violation in chunk:
             located.append(_located(violation, places))
             kept += len(located[-1].places)
-    return tuple(located)
+    return tuple(located), True
 
 
 def _located(violation: CheckerViolation, places: dict[str, list[Place]]) -> ConstraintViolation:

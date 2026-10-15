@@ -43,6 +43,11 @@ class RuleResult:
     total: int
     violations: tuple[ConstraintViolation, ...] = ()
     status: RuleStatus = RuleStatus.CHECKED
+    # Fewer violations listed than found, by the cap on places kept.
+    truncated: bool = False
+    # How locating and counting went: NOT_CHECKED when the time limit cut it short,
+    # FAILED when the database refused it; violations not reached count once each.
+    located: RuleStatus = RuleStatus.CHECKED
 
 
 @dataclass(frozen=True, slots=True)

@@ -26,17 +26,18 @@ RETURN sum(row.times * CASE WHEN holders = 0 THEN 1 ELSE holders END) AS affecte
 
 def count_affected(
     client: AASNeo4JClient, nodes: Iterable[str | None], expired: Callable[[], bool]
-) -> int:
-    """Past the deadline, each remaining violation counts once."""
+) -> tuple[int, bool]:
+    """The count, and False if the time limit cut it short: each violation not reached then
+    counts once."""
     times = Counter(nodes)
     affected = times.pop(None, 0)
     rows = [{"node_id": node, "times": count} for node, count in sorted(times.items())]
     for start in range(0, len(rows), _BATCH):
         batch = rows[start : start + _BATCH]
         if expired():
-            return affected + sum(row["times"] for row in rows[start:])
+            return affected + sum(row["times"] for row in rows[start:]), False
         params = {"rows": batch, "virtual": list(client.model_config.virtual_relationships)}
         record = client.execute_clause(_AFFECTED, single=True, params=params)
         found = record["affected"] if isinstance(record, Record) else None
         affected += found if isinstance(found, int) else sum(row["times"] for row in batch)
-    return affected
+    return affected, True

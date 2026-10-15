@@ -62,11 +62,18 @@ def _finding(rule: RuleResult, occurrences: Mapping[tuple[str, int], Occurrence]
             " each location names the first file."
         )
     unplaced = sum(1 for violation in rule.violations if not violation.places)
-    if unplaced:
+    if rule.located is RuleStatus.NOT_CHECKED:
+        message += " Located and counted only in part: the analysis reached its time limit."
+    elif rule.located is RuleStatus.FAILED:
+        message += (
+            " Not located: the database refused the lookup on this corpus; each violation"
+            " counts once."
+        )
+    elif unplaced:
         message += f" {_count(unplaced, 'violation')} without a location found in the graph."
     if any(violation.more_places for violation in rule.violations):
         message += " Some are shared by more objects than listed."
-    if len(locations) > _MAX_LOCATIONS or len(rule.violations) < rule.total:
+    if rule.truncated or len(locations) > _MAX_LOCATIONS:
         message += " Not every location is listed."
     return Finding(rule.rule_id, Severity.ERROR, message, locations[:_MAX_LOCATIONS])
 

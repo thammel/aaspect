@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import cast
 
 from neo4aas.core.client import AASNeo4JClient
-from neo4j.exceptions import ServiceUnavailable
+from neo4j.exceptions import Neo4jError, ServiceUnavailable
 
 from aaspect.adapters.neo4aas.constraints import (
     _node_id,
@@ -35,10 +35,18 @@ class TestNodeId(unittest.TestCase):
 
 class _Client:
     """Answers every checker query with no rows, except the idShort query of AASd-002,
-    which gets a value the checker does not expect, or `error`."""
+    which gets `id_short` (by default a value the checker does not expect), or `error`;
+    the place lookup raises `locate_error`."""
 
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        error: Exception | None = None,
+        id_short: object = 5,
+        locate_error: Exception | None = None,
+    ) -> None:
         self.error = error
+        self.id_short = id_short
+        self.locate_error = locate_error
 
     model_config = MODEL_CONFIG
 
@@ -46,8 +54,18 @@ class _Client:
         if "n.idShort AS id_short" in query:
             if self.error:
                 raise self.error
-            return [{"node_id": "n", "node_labels": [], "id_short": 5}]
+            return [{"node_id": "n", "node_labels": [], "id_short": self.id_short}]
+        if "occurrence_key" in query and self.locate_error:
+            raise self.locate_error
         return []
+
+
+def _server_error(code: str, message: str = "") -> Neo4jError:
+    return Neo4jError._hydrate_neo4j(code=code, message=message)
+
+
+_REFUSED = "Neo.ClientError.Statement.TypeError"
+_POOL_FULL = "Neo.TransientError.General.MemoryPoolOutOfMemoryError"
 
 
 def _check(client: _Client, version: MetamodelVersion, expired: Callable[[], bool]):
@@ -69,6 +87,33 @@ class TestRuleByRule(unittest.TestCase):
                 MetamodelVersion.V3_1,
                 lambda: False,
             )
+
+    def test_content_the_server_refuses_fails_only_its_rule(self) -> None:
+        with self.assertLogs("aaspect.adapters.neo4aas.constraints", "WARNING"):
+            result = _check(_Client(_server_error(_REFUSED)), MetamodelVersion.V3_1, lambda: False)
+        self.assertEqual(result.rules[0].status, RuleStatus.FAILED)
+
+    def test_the_server_running_short_fails_the_step(self) -> None:
+        error = _server_error(_POOL_FULL, "db.memory.transaction.total.max threshold reached")
+        with self.assertRaises(Neo4jError):
+            _check(_Client(error), MetamodelVersion.V3_1, lambda: False)
+
+    def test_a_refused_lookup_lists_no_places_and_counts_each_once(self) -> None:
+        client = _Client(id_short="1bad", locate_error=_server_error(_REFUSED))
+        with self.assertLogs("aaspect.adapters.neo4aas.constraints", "WARNING"):
+            result = _check(client, MetamodelVersion.V3_1, lambda: False)
+        rule = result.rules[0]
+        self.assertEqual(
+            (rule.status, rule.located, rule.total), (RuleStatus.CHECKED, RuleStatus.FAILED, 1)
+        )
+
+    def test_the_time_limit_during_the_lookup_is_noted(self) -> None:
+        turns = iter([False])
+        result = _check(_Client(id_short="1bad"), MetamodelVersion.V3_1, lambda: next(turns, True))
+        rule = result.rules[0]
+        self.assertEqual(
+            (rule.status, rule.located, rule.total), (RuleStatus.CHECKED, RuleStatus.NOT_CHECKED, 1)
+        )
 
     def test_rules_after_the_time_limit_are_not_checked(self) -> None:
         turns = iter([False, False])
