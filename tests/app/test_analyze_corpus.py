@@ -6,7 +6,13 @@ from aaspect.domain.corpus import AasDocument, Corpus, DocumentFormat, Upload
 from aaspect.domain.report import SectionStatus, ShownError
 from aaspect.domain.version_selection import AutoOrder
 from tests.app.fakes import BrokenValidator, FakeReader, FakeValidator
-from tests.app.graph_fakes import BrokenStore, FakeParser, FakeStore, RecordingGraph
+from tests.app.graph_fakes import (
+    BrokenStore,
+    FailingCleanupStore,
+    FakeParser,
+    FakeStore,
+    RecordingGraph,
+)
 
 UPLOADS = (Upload("a.json", b"{}"), Upload("b.txt", b""))
 CORPUS = Corpus((AasDocument("a.json", DocumentFormat.JSON, b"{}"),))
@@ -98,6 +104,20 @@ class TestAnalyzeCorpus(unittest.TestCase):
         summary = analyze.run(UPLOADS, AUTO).sections[2].blocks[0]
         assert isinstance(summary, Table)
         self.assertEqual(summary.rows[0][1], "schema check failed, newest used")
+
+    def test_failed_cleanup_keeps_the_finished_check(self) -> None:
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            FakeValidator({}),
+            "0.1.0",
+            graph_store=FailingCleanupStore(),
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+        report = analyze.run(UPLOADS, AUTO)
+        self.assertEqual(
+            [s.status for s in report.sections[1:]],
+            [SectionStatus.COMPLETED, SectionStatus.COMPLETED],
+        )
 
     def test_failing_constraint_check_keeps_the_import(self) -> None:
         store = FakeStore(RecordingGraph(RuntimeError("checker broke")))

@@ -65,6 +65,15 @@ class FakeStore:
             self.closed = True
 
 
+class FailingCleanupStore(FakeStore):
+    """Works until the graph is closed, which fails, as a database drop can."""
+
+    @contextmanager
+    def open(self) -> Generator[RecordingGraph]:
+        yield self.graph
+        raise ConnectionError("drop failed")
+
+
 class BrokenStore:
     @contextmanager
     def open(self) -> Generator[RecordingGraph]:

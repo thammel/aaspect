@@ -86,6 +86,33 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         self.assertEqual(paths["AASd-108"], {"Group.L[1]"})
         self.assertEqual(paths["AASd-022"], {"Group.twice"})
 
+    def test_a_shell_does_not_contain_its_submodels(self) -> None:
+        shell = {
+            "id": "urn:aas",
+            "modelType": "AssetAdministrationShell",
+            "assetInformation": {"assetKind": "Instance", "globalAssetId": "urn:asset"},
+            "submodels": [
+                {"type": "ModelReference", "keys": [{"type": "Submodel", "value": "urn:sm"}]}
+            ],
+        }
+        document = _document("a.json", "urn:sm", _property("1bad"))
+        environment = json.loads(document.content)
+        environment["assetAdministrationShells"] = [shell]
+        content = json.dumps(environment).encode()
+        import_corpus(
+            [AasDocument("a.json", DocumentFormat.JSON, content)],
+            Neo4aasEnvironmentParser(),
+            self.graph,
+        )
+
+        result = self.graph.check_constraints(MetamodelVersion.V3_1)
+
+        [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-002"]
+        self.assertEqual(
+            [violation.places for violation in rule.violations],
+            [(Place("urn:sm", 0, "Group.1bad"),)],
+        )
+
     def test_violations_are_placed_in_their_own_variant(self) -> None:
         documents = [
             _document("a.json", "urn:sm", _property("1bad")),
