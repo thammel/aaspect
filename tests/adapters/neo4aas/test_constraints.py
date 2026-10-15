@@ -86,6 +86,17 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         self.assertEqual(paths["AASd-108"], {"Group.L[1]"})
         self.assertEqual(paths["AASd-022"], {"Group.twice"})
 
+    def test_an_id_short_that_is_not_text_is_still_checked(self) -> None:
+        number = {"idShort": 123, "modelType": "Property", "valueType": "xs:string"}
+        import_corpus(
+            [_document("a.json", "urn:sm", number)], Neo4aasEnvironmentParser(), self.graph
+        )
+
+        result = self.graph.check_constraints(MetamodelVersion.V3_1)
+
+        [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-002"]
+        self.assertEqual(rule.violations[0].places, (Place("urn:sm", 0, "Group.123"),))
+
     def test_a_shell_does_not_contain_its_submodels(self) -> None:
         shell = {
             "id": "urn:aas",
