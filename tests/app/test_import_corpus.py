@@ -14,6 +14,32 @@ def _submodels(*contents: tuple[str, str]) -> dict:
     return {"submodels": [{"id": i, "idShort": s} for i, s in contents]}
 
 
+def _expires_after(checks: int):
+    """An `expired` that turns true from call number `checks` + 1 on."""
+    calls = iter(range(checks))
+    return lambda: next(calls, None) is None
+
+
+class TestTimeLimitAfterUpload(unittest.TestCase):
+    def test_graph_is_left_unfinished_at_each_step(self) -> None:
+        # One document: one check while scanning and one per batch come first.
+        for checks, steps in ((2, []), (3, ["link"]), (4, ["link", "occurrences"])):
+            with self.subTest(steps=steps):
+                parser = FakeParser({"a.json": _submodels(("x", "A"))})
+                graph = RecordingGraph()
+
+                result = import_corpus([_document("a.json")], parser, graph, _expires_after(checks))
+
+                self.assertEqual([call for call, _ in graph.calls], ["upload", *steps])
+                self.assertFalse(result.finished)
+                self.assertEqual(result.imported, 1)
+
+    def test_in_time_the_graph_is_finished(self) -> None:
+        parser = FakeParser({"a.json": _submodels(("x", "A"))})
+        result = import_corpus([_document("a.json")], parser, RecordingGraph(), _expires_after(5))
+        self.assertTrue(result.finished)
+
+
 class TestImportCorpus(unittest.TestCase):
     def test_uploads_in_label_order_then_links_then_restores(self) -> None:
         parser = FakeParser({"a.json": _submodels(("x", "A")), "b.json": _submodels(("x", "B"))})

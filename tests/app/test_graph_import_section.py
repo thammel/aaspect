@@ -63,6 +63,14 @@ class TestImportSection(unittest.TestCase):
         self.assertTrue(second.message.startswith("Content 2 of 2 under id x."))
         self.assertEqual(second.locations, (Location("b.json", "x"), Location("c.json", "x")))
 
+    def test_unfinished_import_is_named(self) -> None:
+        result = ImportResult(1, (), (), (), finished=False)
+        [warning] = [b for b in import_section(result).blocks if isinstance(b, Finding)]
+        self.assertEqual(
+            (warning.rule_id, warning.severity), ("analysis-time-limit", Severity.WARNING)
+        )
+        self.assertIn("references are not linked", warning.message)
+
 
 if __name__ == "__main__":
     unittest.main()

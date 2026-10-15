@@ -26,7 +26,7 @@ def check_constraints(
     """`versions` holds each document's label and the version the schema check found,
     None if the schema check failed; only documents in the graph count toward the version
     used."""
-    if expired():
+    if expired() or not imported.finished:
         return Section(
             SECTION_KEY,
             SECTION_TITLE,

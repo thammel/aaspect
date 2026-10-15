@@ -1,3 +1,4 @@
+import dataclasses
 import unittest
 
 from aaspect.app.constraint_check import check_constraints
@@ -63,6 +64,13 @@ class TestCheckConstraints(unittest.TestCase):
         graph = RecordingGraph(RESULT)
         check_constraints(graph, IMPORTED, V3_0, VERSIONS)
         self.assertEqual(graph.calls, [("constraints", V3_0)])
+
+    def test_unfinished_import_skips_the_check(self) -> None:
+        graph = RecordingGraph(RESULT)
+        unfinished = dataclasses.replace(IMPORTED, finished=False)
+        section = check_constraints(graph, unfinished, V3_0, VERSIONS)
+        self.assertEqual(section.status, SectionStatus.SKIPPED)
+        self.assertEqual(graph.calls, [])
 
     def test_time_limit_skips_the_check(self) -> None:
         graph = RecordingGraph(RESULT)

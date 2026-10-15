@@ -26,7 +26,19 @@ def import_section(result: ImportResult) -> Section:
     collisions = tuple(
         finding for collision in result.collisions for finding in _collision_findings(collision)
     )
-    blocks = (summary, _repeated(result.occurrences), *not_imported, *collisions)
+    unfinished = (
+        ()
+        if result.finished
+        else (
+            Finding(
+                "analysis-time-limit",
+                Severity.WARNING,
+                "The analysis reached its time limit before the import was finished:"
+                " references are not linked, so nothing is checked in the graph.",
+            ),
+        )
+    )
+    blocks = (summary, _repeated(result.occurrences), *unfinished, *not_imported, *collisions)
     return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, blocks)
 
 

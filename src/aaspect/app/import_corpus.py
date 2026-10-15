@@ -1,5 +1,6 @@
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
+from functools import partial
 
 from aaspect.domain.corpus import AasDocument, ReadFailure
 from aaspect.domain.environment_size import measure
@@ -26,6 +27,9 @@ class ImportResult:
     collisions: tuple[Collision, ...]
     not_imported: tuple[ReadFailure, ...]
     occurrences: tuple[Occurrence, ...]
+    # False when the time limit came before references were linked and ids restored: the
+    # graph is then incomplete, and nothing may be checked in it.
+    finished: bool = True
 
 
 def import_corpus(
@@ -35,7 +39,8 @@ def import_corpus(
     expired: Callable[[], bool] = lambda: False,
 ) -> ImportResult:
     """Import every convertible document; colliding ids keep their variants apart. Once
-    `expired` turns true, the remaining documents are reported as not imported."""
+    `expired` turns true, the remaining documents are reported as not imported, and the
+    steps that complete the graph are left out."""
     ordered = sorted(documents, key=lambda document: document.label)
     scan = IdScan()
     failures: list[ReadFailure] = []
@@ -48,15 +53,34 @@ def import_corpus(
             failures.extend(ReadFailure(document.label, _TIME_LIMIT) for document in batch)
         else:
             failures.extend(_upload(batch, parser, plan, graph))
-    graph.link_references()
     # Documents that could not be uploaded are not in the graph, so they count nowhere.
     failed = {failure.source for failure in failures}
     occurrences = plan.occurrences(excluding=failed)
-    graph.store_occurrences(occurrences)
-    graph.restore_ids(plan.renames)
+    finished = _complete(graph, plan, occurrences, expired)
     failures.sort(key=lambda failure: failure.source)
     imported = len(ordered) - len(failures)
-    return ImportResult(imported, plan.collisions(excluding=failed), tuple(failures), occurrences)
+    collisions = plan.collisions(excluding=failed)
+    return ImportResult(imported, collisions, tuple(failures), occurrences, finished)
+
+
+def _complete(
+    graph: CorpusGraph,
+    plan: RenamePlan,
+    occurrences: tuple[Occurrence, ...],
+    expired: Callable[[], bool],
+) -> bool:
+    """Link, count and restore, in this order; False if the time limit came first. Each
+    step is one call that runs to its end once started."""
+    steps = (
+        graph.link_references,
+        partial(graph.store_occurrences, occurrences),
+        partial(graph.restore_ids, plan.renames),
+    )
+    for step in steps:
+        if expired():
+            return False
+        step()
+    return True
 
 
 def _scan(
