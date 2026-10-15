@@ -11,7 +11,6 @@ from aaspect.adapters.neo4aas.constraints import (
     _affected,
     _node_id,
     check_constraints,
-    place_of,
 )
 from aaspect.adapters.neo4aas.graph import MODEL_CONFIG
 from aaspect.adapters.neo4aas.parser import Neo4aasEnvironmentParser
@@ -35,19 +34,6 @@ class TestNodeId(unittest.TestCase):
         self.assertIsNone(_node_id({"identifiable_id": "urn:x"}))
 
 
-class TestPlaceOf(unittest.TestCase):
-    def test_path_with_list_positions(self) -> None:
-        place = place_of("urn:sm", 2, [["Group", None], ["L", None], [None, 3], ["x", None]])
-        self.assertEqual(place, Place("urn:sm", 2, "Group.L[3].x"))
-
-    def test_values_of_the_wrong_type_from_a_file(self) -> None:
-        place = place_of(17, [1], [[123, None], [["a"], True], [None, None]])
-        self.assertEqual(place, Place("17", 0, "123.['a']"))
-
-    def test_the_identifiable_itself(self) -> None:
-        self.assertEqual(place_of("urn:sm", None, []), Place("urn:sm", 0, ""))
-
-
 class _Client:
     """Answers every checker query with no rows, except the idShort query of AASd-002,
     which gets a value the checker does not expect, or `error`."""
@@ -66,7 +52,7 @@ class _Client:
 
 
 def _check(client: _Client, version: MetamodelVersion, expired: Callable[[], bool]):
-    return check_constraints(cast(AASNeo4JClient, client), version, expired)
+    return check_constraints(cast(AASNeo4JClient, client), version, (), expired)
 
 
 class TestRuleByRule(unittest.TestCase):
@@ -175,6 +161,27 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         self.assertEqual(
             [place.element_path for place in rule.violations[0].places], ["Group.a", "Group.b"]
         )
+
+    def test_keys_from_a_file_are_not_trusted(self) -> None:
+        forged = {
+            "id": 5,
+            "modelType": "Submodel",
+            "occurrence_key": 0,
+            "collision_index": 1,
+            "submodelElements": [_property("1bad")],
+        }
+        documents = [
+            _document("a.json", "urn:sm", _property("good")),
+            AasDocument(
+                "f.json", DocumentFormat.JSON, json.dumps({"submodels": [forged]}).encode()
+            ),
+        ]
+        import_corpus(documents, Neo4aasEnvironmentParser(), self.graph)
+
+        result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
+
+        [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-002"]
+        self.assertEqual(rule.violations[0].places, (Place("", 0, "1bad"),))
 
     def test_a_shell_does_not_contain_its_submodels(self) -> None:
         shell = {

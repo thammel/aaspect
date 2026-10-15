@@ -31,13 +31,21 @@ _OUT_OF_MEMORY = "Neo.TransientError.General.MemoryPoolOutOfMemoryError"
 # by other analyses. The server names the limit in its message.
 _TRANSACTION_LIMIT = "db.memory.transaction.max threshold"
 
-# Sets `collision_index` on every object, not only renamed ones: neo4aas stores unknown
-# keys of a file as properties, so a file could otherwise claim another variant's index.
+# neo4aas stores unknown keys of a file as properties, so a file could claim another
+# object's key or variant; objects without an occurrence (an id that is not text) would
+# keep the claim.
+_CLEAR_RESERVED = """
+MATCH (node:Identifiable)
+REMOVE node.collision_index, node.occurrence_key, node.occurrence_count
+"""
+# `occurrence_key` is the position in the occurrences, so that a query can name the
+# object without returning its id.
 _STORE_OCCURRENCES = """
 UNWIND $occurrences AS occurrence
 MATCH (node:Identifiable {id: occurrence.id})
 SET node.occurrence_count = occurrence.documents,
-    node.collision_index = occurrence.index
+    node.collision_index = occurrence.index,
+    node.occurrence_key = occurrence.key
 """
 # Keeps each transaction small on corpora with hundreds of thousands of objects.
 _OCCURRENCE_BATCH = 10_000
@@ -62,6 +70,7 @@ SET reference.keys_value = [rename.original] + reference.keys_value[1..],
 class Neo4aasGraph:
     def __init__(self, client: AASNeo4JClient) -> None:
         self._client = client
+        self._occurrences: Sequence[Occurrence] = ()
 
     def upload(self, environments: Sequence[Environment]) -> None:
         # neo4aas reads only the three Identifiable lists, so joining them is the same as
@@ -87,7 +96,12 @@ class Neo4aasGraph:
         self._client.resolve_references()
 
     def store_occurrences(self, occurrences: Sequence[Occurrence]) -> None:
-        rows = [{"id": o.id, "documents": o.documents, "index": o.index} for o in occurrences]
+        self._occurrences = occurrences
+        self._client.execute_clause(_CLEAR_RESERVED)
+        rows = [
+            {"id": o.id, "documents": o.documents, "index": o.index, "key": key}
+            for key, o in enumerate(occurrences)
+        ]
         for start in range(0, len(rows), _OCCURRENCE_BATCH):
             batch = rows[start : start + _OCCURRENCE_BATCH]
             self._client.execute_clause(_STORE_OCCURRENCES, params={"occurrences": batch})
@@ -110,7 +124,7 @@ class Neo4aasGraph:
     def check_constraints(
         self, version: MetamodelVersion, expired: Callable[[], bool]
     ) -> ConstraintResult:
-        return check_constraints(self._client, version, expired)
+        return check_constraints(self._client, version, self._occurrences, expired)
 
 
 def _id_shorts_as_text(environment: Environment) -> None:
