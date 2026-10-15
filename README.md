@@ -4,8 +4,9 @@
 It is built on [neo4aas](https://github.com/rwth-iat/neo4aas), which maps AAS data into a
 Neo4j graph and checks it against the metamodel constraints.
 
-> **Status:** early stage. The schema check works, with its web UI and JSON download
-> (see [Running](#running)); everything marked *planned* below is not built yet.
+> **Status:** early stage. The schema check and the metamodel constraint check work, with
+> their web UI and JSON download (see [Running](#running)); everything marked *planned*
+> below is not built yet.
 
 ## Features
 
@@ -20,9 +21,12 @@ analysis, view the results in the browser and download them as **JSON** or **PDF
   schemas are IDTA's (CC BY 4.0) and are not shipped: AASpect downloads them at startup
   from [admin-shell-io/aas-specs-metamodel](https://github.com/admin-shell-io/aas-specs-metamodel),
   pinned to one commit per version and checked by size and SHA-256.
-- **Metamodel constraints** *(planned)*: import the corpus into Neo4j with neo4aas and
+- **Metamodel constraints** *(available)*: import the corpus into Neo4j with neo4aas and
   evaluate the `AASd-xxx` constraints of the metamodel (IDTA-01001) with its constraint
-  checker. Violations are reported per constraint and per file.
+  checker. The whole corpus is checked by one version: the one chosen, else the most
+  common one; files of other versions are named. Violations are grouped per constraint
+  and located by file, object id and element path; an object shared by many files is
+  listed once, with its first file and the number of files.
 
 ### Analytics *(planned)*
 
