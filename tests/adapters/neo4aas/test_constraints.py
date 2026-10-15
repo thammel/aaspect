@@ -2,7 +2,7 @@ import json
 import os
 import unittest
 
-from aaspect.adapters.neo4aas.constraints import _node_id
+from aaspect.adapters.neo4aas.constraints import _node_id, place_of
 from aaspect.adapters.neo4aas.parser import Neo4aasEnvironmentParser
 from aaspect.adapters.neo4aas.store import DozerDbStore
 from aaspect.app.import_corpus import import_corpus
@@ -22,6 +22,19 @@ class TestNodeId(unittest.TestCase):
         self.assertEqual(_node_id({"list_node_id": "l", "child_node_id": "c"}), "c")
         self.assertEqual(_node_id({"parent_node_id": "p", "id_short": "a"}), "p")
         self.assertIsNone(_node_id({"identifiable_id": "urn:x"}))
+
+
+class TestPlaceOf(unittest.TestCase):
+    def test_path_with_list_positions(self) -> None:
+        place = place_of("urn:sm", 2, [["Group", None], ["L", None], [None, 3], ["x", None]])
+        self.assertEqual(place, Place("urn:sm", 2, "Group.L[3].x"))
+
+    def test_values_of_the_wrong_type_from_a_file(self) -> None:
+        place = place_of(17, [1], [[123, None], [["a"], True], [None, None]])
+        self.assertEqual(place, Place("17", 0, "123.['a']"))
+
+    def test_the_identifiable_itself(self) -> None:
+        self.assertEqual(place_of("urn:sm", None, []), Place("urn:sm", 0, ""))
 
 
 def _property(id_short: str) -> dict:
@@ -47,6 +60,31 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         store = DozerDbStore(_URI, "neo4j", _PASSWORD)
         self.addCleanup(store.close)
         self.graph = self.enterContext(store.open())
+
+    def test_paths_show_list_positions_and_repeated_names(self) -> None:
+        listed = {
+            "idShort": "L",
+            "modelType": "SubmodelElementList",
+            "typeValueListElement": "Property",
+            "valueTypeListElement": "xs:string",
+            "value": [
+                {"modelType": "Property", "valueType": "xs:string"},
+                {"modelType": "Range", "valueType": "xs:int"},
+            ],
+        }
+        twice = {"idShort": "twice", "modelType": "Property", "valueType": "xs:string"}
+        documents = [_document("a.json", "urn:sm", listed, twice, dict(twice))]
+        import_corpus(documents, Neo4aasEnvironmentParser(), self.graph)
+
+        result = self.graph.check_constraints(MetamodelVersion.V3_1)
+
+        paths = {
+            rule.rule_id: {p.element_path for v in rule.violations for p in v.places}
+            for rule in result.rules
+            if rule.total
+        }
+        self.assertEqual(paths["AASd-108"], {"Group.L[1]"})
+        self.assertEqual(paths["AASd-022"], {"Group.twice"})
 
     def test_violations_are_placed_in_their_own_variant(self) -> None:
         documents = [
