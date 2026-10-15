@@ -29,10 +29,13 @@ _OUT_OF_MEMORY = "Neo.TransientError.General.MemoryPoolOutOfMemoryError"
 # by other analyses. The server names the limit in its message.
 _TRANSACTION_LIMIT = "db.memory.transaction.max threshold"
 
+# Sets `collision_index` on every object, not only renamed ones: neo4aas stores unknown
+# keys of a file as properties, so a file could otherwise claim another variant's index.
 _STORE_OCCURRENCES = """
 UNWIND $occurrences AS occurrence
 MATCH (node:Identifiable {id: occurrence.id})
-SET node.occurrence_count = occurrence.documents
+SET node.occurrence_count = occurrence.documents,
+    node.collision_index = occurrence.index
 """
 # Keeps each transaction small on corpora with hundreds of thousands of objects.
 _OCCURRENCE_BATCH = 10_000
@@ -81,7 +84,7 @@ class Neo4aasGraph:
         self._client.resolve_references()
 
     def store_occurrences(self, occurrences: Sequence[Occurrence]) -> None:
-        rows = [{"id": o.id, "documents": o.documents} for o in occurrences]
+        rows = [{"id": o.id, "documents": o.documents, "index": o.index} for o in occurrences]
         for start in range(0, len(rows), _OCCURRENCE_BATCH):
             batch = rows[start : start + _OCCURRENCE_BATCH]
             self._client.execute_clause(_STORE_OCCURRENCES, params={"occurrences": batch})

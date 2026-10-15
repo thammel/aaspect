@@ -117,9 +117,9 @@ class TestImportIntoNeo4j(unittest.TestCase):
         self.assertEqual(
             [tuple(row.values()) for row in rows or []],
             [
-                ("urn:aas-a", "urn:sm", "A", None),
+                ("urn:aas-a", "urn:sm", "A", 0),
                 ("urn:aas-b", "urn:sm", "B", 1),
-                ("urn:aas-c", "urn:sm", "A", None),
+                ("urn:aas-c", "urn:sm", "A", 0),
             ],
         )
         self.assertEqual(len(result.collisions), 1)
@@ -139,6 +139,17 @@ class TestImportIntoNeo4j(unittest.TestCase):
             " RETURN count(n) AS c",
         )
         self.assertEqual(leftover, 0)
+
+    def test_a_file_cannot_set_the_collision_index(self) -> None:
+        environment = {
+            "submodels": [{"id": "urn:forged", "modelType": "Submodel", "collision_index": 5}]
+        }
+        document = AasDocument("f.json", DocumentFormat.JSON, json.dumps(environment).encode())
+
+        import_corpus([document], Neo4aasEnvironmentParser(), self.graph)
+
+        index = _count(self.client, "MATCH (s:Submodel) RETURN s.collision_index AS c")
+        self.assertEqual(index, 0)
 
     def test_content_the_server_refuses_is_reported_per_document(self) -> None:
         refused = {

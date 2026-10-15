@@ -20,8 +20,8 @@ class CorpusGraph(Protocol):
         ...
 
     def store_occurrences(self, occurrences: Sequence[Occurrence]) -> None:
-        """Record on each object how many documents contain it. Call before the restore,
-        while ids are still unique."""
+        """Record on each object how many documents contain it and its collision index.
+        Call before the restore, while ids are still unique."""
         ...
 
     def restore_ids(self, renames: Sequence[Rename]) -> None:
