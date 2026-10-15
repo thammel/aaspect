@@ -8,7 +8,6 @@ from neo4aas.core.client import AASNeo4JClient
 from neo4j.exceptions import ServiceUnavailable
 
 from aaspect.adapters.neo4aas.constraints import (
-    _affected,
     _node_id,
     check_constraints,
 )
@@ -83,12 +82,6 @@ class TestRuleByRule(unittest.TestCase):
         self.assertEqual(set(statuses[2:]), {RuleStatus.NOT_CHECKED})
 
 
-class TestAffected(unittest.TestCase):
-    def test_past_the_deadline_each_violation_counts_once(self) -> None:
-        client = cast(AASNeo4JClient, _Client())
-        self.assertEqual(_affected(client, ["a", "b", None], lambda: True), 3)
-
-
 def _property(id_short: str) -> dict:
     return {
         "idShort": id_short,
@@ -125,7 +118,8 @@ class TestConstraintsInNeo4j(unittest.TestCase):
             ],
         }
         twice = {"idShort": "twice", "modelType": "Property", "valueType": "xs:string"}
-        documents = [_document("a.json", "urn:sm", listed, twice, dict(twice))]
+        again = dict(twice, idShort="again")
+        documents = [_document("a.json", "urn:sm", listed, twice, dict(twice), again, dict(again))]
         import_corpus(documents, Neo4aasEnvironmentParser(), self.graph)
 
         result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
@@ -136,7 +130,9 @@ class TestConstraintsInNeo4j(unittest.TestCase):
             if rule.total
         }
         self.assertEqual(paths["AASd-108"], {"Group.L[1]"})
-        self.assertEqual(paths["AASd-022"], {"Group.twice"})
+        self.assertEqual(paths["AASd-022"], {"Group.again", "Group.twice"})
+        # Both repeated names are reported on the same parent; each counts.
+        self.assertEqual({r.rule_id: r.total for r in result.rules}["AASd-022"], 2)
 
     def test_an_id_short_that_is_not_text_is_still_checked(self) -> None:
         number = {"idShort": 123, "modelType": "Property", "valueType": "xs:string"}
@@ -182,6 +178,26 @@ class TestConstraintsInNeo4j(unittest.TestCase):
 
         [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-002"]
         self.assertEqual(rule.violations[0].places, (Place("", 0, "1bad"),))
+
+    def test_a_nested_reference_counts_every_element_holding_the_outer_one(self) -> None:
+        inner = {"type": "ExternalReference", "keys": [{"type": "Property", "value": "x"}]}
+        outer = {
+            "type": "ExternalReference",
+            "keys": [{"type": "GlobalReference", "value": "urn:ok"}],
+            "referredSemanticId": inner,
+        }
+        holders = [
+            {"idShort": n, "modelType": "Property", "valueType": "xs:string", "semanticId": outer}
+            for n in ("a", "b", "c")
+        ]
+        import_corpus(
+            [_document("a.json", "urn:sm", *holders)], Neo4aasEnvironmentParser(), self.graph
+        )
+
+        result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
+
+        [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-122"]
+        self.assertEqual(rule.total, 3)
 
     def test_a_shell_does_not_contain_its_submodels(self) -> None:
         shell = {

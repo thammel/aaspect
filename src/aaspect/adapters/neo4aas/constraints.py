@@ -1,14 +1,14 @@
 """Run the neo4aas constraint checker, rule by rule, and place each violation."""
 
 import logging
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Sequence
 
 from neo4aas.core.client import AASNeo4JClient
 from neo4aas.core.validation import AASConstraintChecker
 from neo4aas.core.validation import ConstraintViolation as CheckerViolation
-from neo4j import Record
 from neo4j.exceptions import DriverError
 
+from aaspect.adapters.neo4aas.counts import count_affected
 from aaspect.adapters.neo4aas.places import MAX_PLACES, below, find_places
 from aaspect.domain.constraints.violations import (
     ConstraintResult,
@@ -36,19 +36,6 @@ _NODE_KEYS = (
 _MAX_LOCATED = 1_000
 # Violations located per lookup; checked against the cap above in between.
 _CHUNK = 100
-_NODE_BATCH = 1_000
-# Identical References are stored once and shared, so one violating Reference stands for
-# every element holding it; an element counts once. The edges into a Reference come from
-# its holders, apart from the links neo4aas adds itself.
-_AFFECTED = """
-UNWIND $node_ids AS node_id
-MATCH (node) WHERE elementId(node) = node_id
-RETURN sum(
-    CASE WHEN node:Reference
-    THEN COUNT { (node)<-[edge]-() WHERE NOT type(edge) IN $virtual }
-    ELSE 1 END
-) AS affected
-"""
 
 
 def check_constraints(
@@ -73,7 +60,8 @@ def check_constraints(
             rules.append(RuleResult(rule, 0, status=RuleStatus.FAILED))
             continue
         located = _locate(client, found, occurrences, expired)
-        affected = _affected(client, [_node_id(violation.details) for violation in found], expired)
+        nodes = [_node_id(violation.details) for violation in found]
+        affected = count_affected(client, nodes, expired)
         rules.append(RuleResult(rule, affected, located))
     return ConstraintResult(tuple(rules))
 
@@ -111,22 +99,3 @@ def _located(violation: CheckerViolation, places: dict[str, list[Place]]) -> Con
 
 def _node_id(details: dict) -> str | None:
     return next((details[key] for key in _NODE_KEYS if isinstance(details.get(key), str)), None)
-
-
-def _affected(client: AASNeo4JClient, nodes: list[str | None], expired: Callable[[], bool]) -> int:
-    """How many places in the data the violations of one rule stand for. Past the deadline,
-    each remaining violation counts once."""
-    node_ids = sorted({node for node in nodes if node is not None})
-    affected = len(nodes) - sum(1 for node in nodes if node is not None)
-    for start, batch in enumerate(_batches(node_ids)):
-        if expired():
-            return affected + len(node_ids) - start * _NODE_BATCH
-        params = {"node_ids": batch, "virtual": list(client.model_config.virtual_relationships)}
-        record = client.execute_clause(_AFFECTED, single=True, params=params)
-        affected += record["affected"] if isinstance(record, Record) else len(batch)
-    return affected
-
-
-def _batches(items: list[str]) -> Iterator[list[str]]:
-    for start in range(0, len(items), _NODE_BATCH):
-        yield items[start : start + _NODE_BATCH]
