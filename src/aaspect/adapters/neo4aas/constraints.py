@@ -38,8 +38,6 @@ _MAX_PLACES = 100
 # many violations a crafted corpus produces.
 _MAX_LISTED = 1_000
 _NODE_BATCH = 1_000
-# Walks up the containment edges only: a Reference links to its target by `references`,
-# which would make an AAS appear to contain its submodels. Real nesting is far below 64.
 # Identical References are stored once and shared, so one violating Reference stands for
 # every element holding it; an element counts once. The edges into a Reference come from
 # its holders, apart from the links neo4aas adds itself.
@@ -52,15 +50,21 @@ RETURN sum(
     ELSE 1 END
 ) AS affected
 """
+# Walks up every edge except the links neo4aas adds itself: following `references` would
+# make an AAS appear to contain its submodels. Sorted so that the same corpus always lists
+# the same places; Neo4j visits every holder of a shared Reference either way, and sorting
+# 100,000 of them took 0.6 s more. Real nesting is far below 64.
 _PLACES = """
 UNWIND $node_ids AS node_id
 MATCH (node) WHERE elementId(node) = node_id
 CALL (node) {
-    MATCH (node) ((child)<-[edge]-(parent) WHERE type(edge) <> "references"){0,64}
+    MATCH (node) ((child)<-[edge]-(parent) WHERE NOT type(edge) IN $virtual){0,64}
           (owner:Identifiable)
-    RETURN owner,
-           [step IN range(size(edge) - 1, 0, -1) | [child[step].idShort, edge[step].list_index]]
-           AS steps
+    WITH DISTINCT owner,
+         [step IN range(size(edge) - 1, 0, -1) | [child[step].idShort, edge[step].list_index]]
+         AS steps
+    RETURN owner, steps
+    ORDER BY owner.id, steps
     LIMIT $limit
 }
 RETURN node_id, owner.id AS id, owner.collision_index AS collision_index, steps
@@ -117,7 +121,11 @@ def _places(
         if expired():
             break
         # One more than kept, to tell a capped list from a complete one.
-        params = {"node_ids": batch, "limit": _MAX_PLACES + 1}
+        params = {
+            "node_ids": batch,
+            "limit": _MAX_PLACES + 1,
+            "virtual": list(client.model_config.virtual_relationships),
+        }
         for record in client.execute_clause(_PLACES, params=params) or []:
             place = place_of(record["id"], record["collision_index"], record["steps"])
             places.setdefault(record["node_id"], []).append(place)

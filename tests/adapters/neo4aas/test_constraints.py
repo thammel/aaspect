@@ -163,6 +163,19 @@ class TestConstraintsInNeo4j(unittest.TestCase):
         [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-002"]
         self.assertEqual(rule.violations[0].places, (Place("urn:sm", 0, "Group.123"),))
 
+    def test_each_holder_is_listed_once_in_a_fixed_order(self) -> None:
+        twice = [dict(_property(name), supplementalSemanticIds=[_BAD_SEMANTIC_ID]) for name in "ba"]
+        import_corpus(
+            [_document("a.json", "urn:sm", *twice)], Neo4aasEnvironmentParser(), self.graph
+        )
+
+        result = self.graph.check_constraints(MetamodelVersion.V3_1, lambda: False)
+
+        [rule] = [rule for rule in result.rules if rule.rule_id == "AASd-122"]
+        self.assertEqual(
+            [place.element_path for place in rule.violations[0].places], ["Group.a", "Group.b"]
+        )
+
     def test_a_shell_does_not_contain_its_submodels(self) -> None:
         shell = {
             "id": "urn:aas",
