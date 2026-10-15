@@ -1,6 +1,5 @@
 """Check an imported corpus against the metamodel constraints of one version."""
 
-from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
 
 from aaspect.app.import_corpus import ImportResult
@@ -36,22 +35,22 @@ def check_constraints(
     chosen = corpus_version(choice, [entry for entry in versions if entry[0] not in missing])
     result = checker.check_constraints(chosen.version)
     occurrences = {(o.original, o.index): o for o in imported.occurrences}
-    counts = Counter(violation.rule_id for violation in result.violations)
+    total = sum(rule.total for rule in result.rules)
     summary = Table(
         "Constraint check",
         ("Metamodel version", "Determined by", "Constraints checked", "Violations"),
-        ((chosen.version.value, chosen.basis, len(result.checked), len(result.violations)),),
+        ((chosen.version.value, chosen.basis, len(result.rules), total),),
     )
     per_rule = Table(
         "Violations per constraint",
         ("Constraint", "Violations"),
-        tuple((rule_id, counts[rule_id]) for rule_id in result.checked),
+        tuple((rule.rule_id, rule.total) for rule in result.rules),
     )
     blocks = (
         summary,
         per_rule,
         *_other_versions(chosen),
-        *violation_findings(result.violations, occurrences),
+        *violation_findings(result.rules, occurrences),
     )
     return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, blocks)
 

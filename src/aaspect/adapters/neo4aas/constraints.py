@@ -4,8 +4,14 @@ from collections.abc import Iterator
 
 from neo4aas.core.client import AASNeo4JClient
 from neo4aas.core.validation import AASConstraintChecker
+from neo4aas.core.validation import ConstraintViolation as CheckerViolation
 
-from aaspect.domain.constraints.violations import ConstraintResult, ConstraintViolation, Place
+from aaspect.domain.constraints.violations import (
+    ConstraintResult,
+    ConstraintViolation,
+    Place,
+    RuleResult,
+)
 from aaspect.domain.metamodel import MetamodelVersion
 
 # The detail naming the violating element, most specific first: a check on a list child
@@ -22,6 +28,9 @@ _NODE_KEYS = (
 # A Reference is stored once for every element holding the same one, so a wrong
 # semanticId can belong to thousands of objects.
 _MAX_PLACES = 100
+# Located per rule; the rest are only counted. Keeps memory and lookups bounded however
+# many violations a crafted corpus produces.
+_MAX_LISTED = 1_000
 _NODE_BATCH = 1_000
 # Walks up the containment edges only: a Reference links to its target by `references`,
 # which would make an AAS appear to contain its submodels. Real nesting is far below 64.
@@ -42,18 +51,28 @@ RETURN node_id, owner.id AS id, coalesce(owner.collision_index, 0) AS collision_
 
 def check_constraints(client: AASNeo4JClient, version: MetamodelVersion) -> ConstraintResult:
     report = AASConstraintChecker(client, version.value).check_all()
-    nodes = [_node_id(violation.details) for violation in report.violations]
+    found: dict[str, list[CheckerViolation]] = {rule: [] for rule in report.checked_constraints}
+    for violation in report.violations:
+        found[violation.constraint_id].append(violation)
+    listed = {rule: violations[:_MAX_LISTED] for rule, violations in found.items()}
+    nodes = {_node_id(v.details) for violations in listed.values() for v in violations}
     places = _places(client, {node for node in nodes if node is not None})
-    violations = tuple(
-        ConstraintViolation(
-            violation.constraint_id,
-            violation.description,
-            tuple(places.get(node, ())[:_MAX_PLACES]) if node else (),
-            len(places.get(node, ())) > _MAX_PLACES if node else False,
+    return ConstraintResult(
+        tuple(
+            RuleResult(
+                rule,
+                len(found[rule]),
+                tuple(_located(violation, places) for violation in violations),
+            )
+            for rule, violations in listed.items()
         )
-        for violation, node in zip(report.violations, nodes, strict=True)
     )
-    return ConstraintResult(tuple(report.checked_constraints), violations)
+
+
+def _located(violation: CheckerViolation, places: dict[str, list[Place]]) -> ConstraintViolation:
+    node = _node_id(violation.details)
+    found = places.get(node, []) if node else []
+    return ConstraintViolation(tuple(found[:_MAX_PLACES]), len(found) > _MAX_PLACES)
 
 
 def _node_id(details: dict) -> str | None:

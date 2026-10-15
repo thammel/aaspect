@@ -21,7 +21,7 @@ class FakeParser:
         return copy.deepcopy(self.environments[document.label])
 
 
-NO_VIOLATIONS = ConstraintResult((), ())
+NO_VIOLATIONS = ConstraintResult(())
 
 
 class RecordingGraph:

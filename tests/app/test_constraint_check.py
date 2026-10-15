@@ -3,7 +3,12 @@ import unittest
 from aaspect.app.constraint_check import check_constraints
 from aaspect.app.import_corpus import ImportResult
 from aaspect.domain.blocks import Finding, Location, Severity, Table
-from aaspect.domain.constraints.violations import ConstraintResult, ConstraintViolation, Place
+from aaspect.domain.constraints.violations import (
+    ConstraintResult,
+    ConstraintViolation,
+    Place,
+    RuleResult,
+)
 from aaspect.domain.corpus import ReadFailure
 from aaspect.domain.id_collisions import Occurrence
 from aaspect.domain.metamodel import MetamodelVersion
@@ -20,8 +25,10 @@ IMPORTED = ImportResult(
 )
 VERSIONS = [("a.json", V3_1), ("b.json", V3_1), ("c.xml", V3_0), ("broken.json", V3_0)]
 RESULT = ConstraintResult(
-    ("AASd-002", "AASd-005"),
-    (ConstraintViolation("AASd-002", "bad idShort", (Place("sm", 0, "x.y"),)),),
+    (
+        RuleResult("AASd-002", 1, (ConstraintViolation((Place("sm", 0, "x.y"),)),)),
+        RuleResult("AASd-005", 0),
+    )
 )
 
 
@@ -44,7 +51,7 @@ class TestCheckConstraints(unittest.TestCase):
         )
         self.assertIn("Determined as version 3.0", other.message)
         self.assertEqual(violation.locations, (Location("a.json", "sm", "x.y"),))
-        self.assertIn("occur in 2 files", violation.message)
+        self.assertIn("2 file occurrences", violation.message)
 
     def test_chosen_version_is_used(self) -> None:
         graph = RecordingGraph(RESULT)

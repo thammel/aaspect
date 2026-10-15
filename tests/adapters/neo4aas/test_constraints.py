@@ -57,9 +57,10 @@ class TestConstraintsInNeo4j(unittest.TestCase):
 
         result = self.graph.check_constraints(MetamodelVersion.V3_1)
 
-        by_rule: dict[str, set[Place]] = {}
-        for violation in result.violations:
-            by_rule.setdefault(violation.rule_id, set()).update(violation.places)
+        by_rule = {
+            rule.rule_id: {place for violation in rule.violations for place in violation.places}
+            for rule in result.rules
+        }
         self.assertEqual(
             by_rule["AASd-002"],
             {Place("urn:sm", 0, "Group.1bad"), Place("urn:sm", 1, "Group.2bad")},
@@ -72,7 +73,10 @@ class TestConstraintsInNeo4j(unittest.TestCase):
                 Place("urn:sm", 1, "Group.2bad"),
             },
         )
-        self.assertIn("AASd-002", result.checked)
+        self.assertEqual(
+            {rule.rule_id: rule.total for rule in result.rules if rule.total},
+            {"AASd-002": 2, "AASd-122": 1, "AASd-124": 1},
+        )
 
 
 if __name__ == "__main__":
