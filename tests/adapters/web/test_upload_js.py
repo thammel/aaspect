@@ -239,6 +239,18 @@ class TestFolderPicker(unittest.TestCase):
         )
         self.assertFalse(result)
 
+    def test_in_an_electron_app_the_folder_input_is_used(self) -> None:
+        result = _run(
+            "(() => { Object.defineProperty(globalThis, 'navigator',"
+            " { value: { userAgent: 'Mozilla/5.0 Code/1.95.0 Chrome/128.0 Electron/32.2.1' } });"
+            " global.window = { showDirectoryPicker: () => null };"
+            f" {_FAKE_PAGE}"
+            " const click = { prevented: false, preventDefault() { this.prevented = true; } };"
+            " handlers.folderclick(click);"
+            " return [click.prevented, elements['#selection'].textContent]; })()"
+        )
+        self.assertEqual(result, [False, "Reading the folder… a large folder takes a while."])
+
     def test_without_the_picker_the_folder_input_opens_with_a_notice(self) -> None:
         result = _run(
             f"(() => {{ {_FAKE_PAGE}"

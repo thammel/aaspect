@@ -125,12 +125,14 @@ function setUp(form) {
   // A second click would start a second analysis while the browser waits for the first;
   // the server keeps running both, and a third finds no free slot.
   let submitted = false;
-  // Inside another page, such as VS Code's browser view, Chromium refuses the picker while
-  // the folder input still works.
+  // Inside another page Chromium refuses the picker, and in Electron apps such as VS Code's
+  // browser view it opens but never returns the folder; the folder input works in both.
   let pickerRefused = false;
+  const electron = typeof navigator !== "undefined" && /\bElectron\//.test(navigator.userAgent);
   const usePicker = () =>
     typeof window.showDirectoryPicker === "function" &&
     window.self === window.top &&
+    !electron &&
     !pickerRefused;
   const folderEntries = () => (read ? read.entries : entries(folderInput, true));
   const current = () =>
