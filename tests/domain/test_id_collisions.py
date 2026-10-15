@@ -68,9 +68,9 @@ class TestPlan(unittest.TestCase):
         self.assertEqual(
             set(plan.occurrences()),
             {
-                Occurrence("x", "x", "Submodel", 2),
-                Occurrence("x__collision-1", "x", "Submodel", 1),
-                Occurrence("aas", "aas", "AssetAdministrationShell", 1),
+                Occurrence("x", "x", "Submodel", 2, 0, "a"),
+                Occurrence("x__collision-1", "x", "Submodel", 1, 1, "b"),
+                Occurrence("aas", "aas", "AssetAdministrationShell", 1, 0, "a"),
             },
         )
 
@@ -82,14 +82,17 @@ class TestPlan(unittest.TestCase):
         )
         self.assertEqual(
             set(plan.occurrences(excluding={"a"})),
-            {Occurrence("x", "x", "Submodel", 1), Occurrence("x__collision-1", "x", "Submodel", 1)},
+            {
+                Occurrence("x", "x", "Submodel", 1, 0, "c"),
+                Occurrence("x__collision-1", "x", "Submodel", 1, 1, "b"),
+            },
         )
         self.assertEqual(plan.collisions(excluding={"b"}), ())
 
     def test_an_object_listed_twice_in_one_document_counts_once(self) -> None:
         env = _environment(_submodel("x", "A"), _submodel("y", "B"), _submodel("x", "A"))
         plan = _plan_for(("a", env), ("b", _environment(_submodel("x", "A"))))
-        self.assertIn(Occurrence("x", "x", "Submodel", 2), plan.occurrences())
+        self.assertIn(Occurrence("x", "x", "Submodel", 2, 0, "a"), plan.occurrences())
 
 
 class TestRewrite(unittest.TestCase):

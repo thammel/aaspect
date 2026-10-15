@@ -30,8 +30,8 @@ class TestImportCorpus(unittest.TestCase):
                 (
                     "occurrences",
                     (
-                        Occurrence("x", "x", "Submodel", 1),
-                        Occurrence("x__collision-1", "x", "Submodel", 1),
+                        Occurrence("x", "x", "Submodel", 1, 0, "a.json"),
+                        Occurrence("x__collision-1", "x", "Submodel", 1, 1, "b.json"),
                     ),
                 ),
                 ("restore", (Rename("x", "x__collision-1", 1),)),

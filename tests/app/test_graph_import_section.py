@@ -39,9 +39,9 @@ class TestImportSection(unittest.TestCase):
             collisions=(Collision("x", (("a.json",), ("b.json", "c.json"))),),
             not_imported=(ReadFailure("bad.json", "Not imported: broken"),),
             occurrences=(
-                Occurrence("x", "x", "Submodel", 1),
-                Occurrence("x__collision-1", "x", "Submodel", 2),
-                Occurrence("cd", "cd", "ConceptDescription", 3),
+                Occurrence("x", "x", "Submodel", 1, 0, "a.json"),
+                Occurrence("x__collision-1", "x", "Submodel", 2, 1, "b.json"),
+                Occurrence("cd", "cd", "ConceptDescription", 3, 0, "a.json"),
             ),
         )
 

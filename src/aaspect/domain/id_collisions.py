@@ -44,12 +44,15 @@ class Collision:
 @dataclass(frozen=True, slots=True)
 class Occurrence:
     """One stored object: `id` as imported (temporary for a later variant), `original` as
-    in the files, and how many documents contain it."""
+    in the files, how many documents contain it and the first of them. `index` is the
+    variant's collision index, 0 for the content that keeps the id."""
 
     id: str
     original: str
     kind: str
     documents: int
+    index: int
+    first_document: str
 
 
 class IdScan:
@@ -110,15 +113,16 @@ class RenamePlan:
     def occurrences(self, excluding: Collection[str] = ()) -> tuple[Occurrence, ...]:
         return tuple(
             Occurrence(
-                rename.temporary
-                if (rename := self._temporary.get((identifier, content)))
-                else identifier,
+                rename.temporary if rename else identifier,
                 identifier,
                 self._kinds[identifier, content],
                 len(labels),
+                rename.index if rename else 0,
+                labels[0],
             )
             for identifier, contents in self._contents.items()
             for content, labels in _kept(contents, excluding).items()
+            for rename in [self._temporary.get((identifier, content))]
         )
 
     @property
