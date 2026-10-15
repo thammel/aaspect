@@ -12,7 +12,8 @@ NODE = shutil.which("node")
 
 def _run(expression: str) -> object:
     program = (
-        f"const m = require({json.dumps(str(SCRIPT))}); console.log(JSON.stringify({expression}));"
+        f"const m = require({json.dumps(str(SCRIPT))});"
+        f" Promise.resolve({expression}).then((v) => console.log(JSON.stringify(v)));"
     )
     result = subprocess.run(
         [NODE or "node"], input=program, capture_output=True, text=True, check=True, timeout=30
@@ -75,13 +76,75 @@ class TestSelectFiles(unittest.TestCase):
         )
 
 
+# Folder handles as showDirectoryPicker gives them; `listed` records each folder read.
+_FAKE_FOLDER = """
+const listed = [];
+const dir = (name, children) => ({
+  kind: "directory", name,
+  async *values() { listed.push(name); yield* children; },
+});
+const file = (name, size = 10) => ({ kind: "file", name, getFile: async () => ({ size }) });
+"""
+
+
+def _read(tree: str, max_files: int, max_bytes: int) -> dict:
+    result = _run(
+        f"(async () => {{ {_FAKE_FOLDER} const r = await m.readFolder({tree}, {max_files},"
+        f" {max_bytes}, () => {{}}); return {{paths: r.entries.map(e => e.path),"
+        " complete: r.complete, listed}; })()"
+    )
+    assert isinstance(result, dict)
+    return result
+
+
+@unittest.skipUnless(NODE, "Node.js is not installed")
+class TestReadFolder(unittest.TestCase):
+    def test_keeps_aas_files_in_path_order(self) -> None:
+        tree = (
+            'dir("d", [file("z.json"), file("README.md"), dir("a", [file("x.AASX")]),'
+            ' file("a.json"), file("b.xml")])'
+        )
+        result = _read(tree, 10, 10**6)
+        # The same order the folder input gives: "d/a.json" before "d/a/x.AASX".
+        self.assertEqual(result["paths"], ["d/a.json", "d/a/x.AASX", "d/b.xml", "d/z.json"])
+        self.assertTrue(result["complete"])
+
+    def test_stops_reading_at_the_file_limit(self) -> None:
+        tree = 'dir("d", [dir("a", [file("1.json"), file("2.json")]), dir("b", [file("3.json")])])'
+        result = _read(tree, 2, 10**6)
+        self.assertEqual(result["paths"], ["d/a/1.json", "d/a/2.json"])
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["listed"], ["d", "a", "b"])
+
+    def test_stops_reading_at_the_byte_limit(self) -> None:
+        tree = 'dir("d", [file("1.json", 1000), file("2.json", 1000), dir("e", [])])'
+        # 4096 request overhead + 1000 + 512 fits in 6000; a second file does not.
+        result = _read(tree, 10, 6000)
+        self.assertEqual((result["paths"], result["complete"]), (["d/1.json"], False))
+        self.assertEqual(result["listed"], ["d"])
+
+    def test_unreadable_files_and_folders_are_left_out(self) -> None:
+        tree = (
+            'dir("d", [{kind: "file", name: "locked.json", getFile: async () =>'
+            ' { throw new Error("locked"); }}, {kind: "directory", name: "private",'
+            ' async *values() { throw new Error("denied"); }}, file("ok.json")])'
+        )
+        self.assertEqual(_read(tree, 10, 10**6)["paths"], ["d/ok.json"])
+
+    def test_summary_when_the_folder_holds_more(self) -> None:
+        self.assertEqual(
+            _run("m.summary({chosen: [1, 2], total: 2}, 2, 512 * 2 ** 20, false)"),
+            "2 files will be analyzed; the folder holds more (limit: 2 files, 512 MB).",
+        )
+
+
 # A page reduced to what setUp touches: the form, its inputs and button, and window.
 _FAKE_PAGE = """
 const handlers = {};
 const on = (target) => (type, handler) => { handlers[target + type] = handler; };
-const input = () => ({ files: [], value: "", addEventListener: () => {} });
+const input = (name) => ({ files: [], value: "", addEventListener: on(name) });
 const elements = {
-  "#files": input(), "#folder": input(), "#selection": { textContent: "" },
+  "#files": input("files"), "#folder": input("folder"), "#selection": { textContent: "" },
   'button[type="submit"]': { disabled: false, textContent: "Analyze" },
 };
 const form = {
@@ -90,7 +153,11 @@ const form = {
   addEventListener: on("form"),
 };
 global.window = { addEventListener: on("window") };
-global.DataTransfer = class { constructor() { this.files = []; this.items = { add: () => {} }; } };
+const sent = [];
+global.DataTransfer = class {
+  constructor() { this.files = []; this.items = { add: (f) => sent.push(f.name) }; }
+};
+global.File = class { constructor(parts, name) { this.name = name; } };
 m.setUp(form);
 const button = elements['button[type="submit"]'];
 const submit = () => {
@@ -113,6 +180,36 @@ class TestRepeatedSubmit(unittest.TestCase):
             " return [button.disabled, button.textContent, submit()]; })()"
         )
         self.assertEqual(result, [False, "Analyze", False])
+
+
+@unittest.skipUnless(NODE, "Node.js is not installed")
+class TestFolderPicker(unittest.TestCase):
+    def test_folder_is_read_and_sent_with_its_paths(self) -> None:
+        result = _run(
+            f"(async () => {{ {_FAKE_PAGE} {_FAKE_FOLDER}"
+            " let during;"
+            ' const watched = { kind: "file", name: "a.json",'
+            " getFile: async () => {"
+            " during = [button.disabled, submit()]; return { size: 10 }; } };"
+            ' window.showDirectoryPicker = async () => dir("d", [watched]);'
+            " const click = { prevented: false, preventDefault() { this.prevented = true; } };"
+            " handlers.folderclick(click);"
+            " await new Promise((done) => setTimeout(done, 0));"
+            " const notice = elements['#selection'].textContent;"
+            " submit();"
+            " return [click.prevented, during, notice, sent]; })()"
+        )
+        # While reading, the button is disabled and a submit is refused.
+        self.assertEqual(result, [True, [True, True], "1 file will be analyzed.", ["d/a.json"]])
+
+    def test_without_the_picker_the_folder_input_opens_with_a_notice(self) -> None:
+        result = _run(
+            f"(() => {{ {_FAKE_PAGE}"
+            " const click = { prevented: false, preventDefault() { this.prevented = true; } };"
+            " handlers.folderclick(click);"
+            " return [click.prevented, elements['#selection'].textContent]; })()"
+        )
+        self.assertEqual(result, [False, "Reading the folder… a large folder takes a while."])
 
 
 if __name__ == "__main__":

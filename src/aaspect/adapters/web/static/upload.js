@@ -32,6 +32,56 @@ function selectFiles(picked, folder, maxFiles, maxBytes) {
   return { chosen, total: candidates.length };
 }
 
+// Directory names end in "/" so that siblings sort as their full paths do: "a.json" comes
+// before "a/x.json" because "." sorts before "/".
+function sortKey(handle) {
+  return handle.kind === "directory" ? `${handle.name}/` : handle.name;
+}
+
+function byKey(a, b) {
+  const [x, y] = [sortKey(a), sortKey(b)];
+  if (x === y) return 0;
+  return x < y ? -1 : 1;
+}
+
+// A folder chosen with the browser's folder input is listed in full before the page sees
+// any of it, which takes minutes for a folder of 200,000 files. Where the browser offers
+// showDirectoryPicker, the folder is read in path order instead, and reading stops once a
+// limit is reached. `progress` gets the number of files kept so far.
+async function readFolder(root, maxFiles, maxBytes, progress) {
+  const kept = [];
+  let bytes = REQUEST_OVERHEAD;
+  async function walk(directory, path) {
+    const children = [];
+    try {
+      for await (const child of directory.values()) children.push(child);
+    } catch {
+      return true; // A subfolder the browser may not read is left out, like a locked file.
+    }
+    for (const child of children.sort(byKey)) {
+      const childPath = `${path}/${child.name}`;
+      if (child.kind === "directory") {
+        if (!(await walk(child, childPath))) return false;
+      } else if (isAasFile(child)) {
+        let file;
+        try {
+          file = await child.getFile();
+        } catch {
+          continue;
+        }
+        const cost = file.size + PER_FILE_OVERHEAD;
+        if (kept.length >= maxFiles || bytes + cost > maxBytes) return false;
+        kept.push({ name: child.name, path: childPath, size: file.size, file });
+        bytes += cost;
+        progress(kept.length);
+      }
+    }
+    return true;
+  }
+  const complete = await walk(root, root.name);
+  return { entries: kept, complete };
+}
+
 function entries(input, fromFolder) {
   return Array.from(input.files, (file) => ({
     name: file.name,
@@ -41,12 +91,20 @@ function entries(input, fromFolder) {
   }));
 }
 
-function summary(selection, maxFiles, maxBytes) {
+// `folderComplete` is false when reading a folder stopped at a limit, so the number of
+// files it holds is not known.
+function summary(selection, maxFiles, maxBytes, folderComplete = true) {
+  const megabytes = Math.floor(maxBytes / 2 ** 20);
+  if (!folderComplete) {
+    return (
+      `${selection.chosen.length} files will be analyzed; the folder holds more ` +
+      `(limit: ${maxFiles} files, ${megabytes} MB).`
+    );
+  }
   if (selection.total === 0) return "";
   if (selection.chosen.length === selection.total) {
     return `${selection.total} ${selection.total === 1 ? "file" : "files"} will be analyzed.`;
   }
-  const megabytes = Math.floor(maxBytes / 2 ** 20);
   return (
     `${selection.chosen.length} of ${selection.total} files will be analyzed ` +
     `(limit: ${maxFiles} files, ${megabytes} MB).`
@@ -59,20 +117,60 @@ function setUp(form) {
   const notice = form.querySelector("#selection");
   const maxFiles = Number(form.dataset.maxFiles);
   const maxBytes = Number(form.dataset.maxBytes);
-  const current = () =>
-    selectFiles(entries(filesInput, false), entries(folderInput, true), maxFiles, maxBytes);
-
-  const show = () => {
-    notice.textContent = summary(current(), maxFiles, maxBytes);
-  };
-  filesInput.addEventListener("change", show);
-  folderInput.addEventListener("change", show);
-
-  // A second click would start a second analysis while the browser waits for the first;
-  // the server keeps running both, and a third finds no free slot.
   const button = form.querySelector('button[type="submit"]');
   const label = button.textContent;
+  // A folder read with showDirectoryPicker: its entries, and whether it was read to the end.
+  let read = null;
+  let reading = false;
+  // A second click would start a second analysis while the browser waits for the first;
+  // the server keeps running both, and a third finds no free slot.
   let submitted = false;
+  const folderEntries = () => (read ? read.entries : entries(folderInput, true));
+  const current = () =>
+    selectFiles(entries(filesInput, false), folderEntries(), maxFiles, maxBytes);
+
+  const show = () => {
+    notice.textContent = summary(current(), maxFiles, maxBytes, read ? read.complete : true);
+  };
+  filesInput.addEventListener("change", show);
+  folderInput.addEventListener("change", () => {
+    read = null;
+    show();
+  });
+  folderInput.addEventListener("cancel", show);
+  folderInput.addEventListener("click", (event) => {
+    if (typeof window.showDirectoryPicker !== "function") {
+      notice.textContent = "Reading the folder… a large folder takes a while.";
+      return;
+    }
+    event.preventDefault();
+    chooseFolder();
+  });
+
+  async function chooseFolder() {
+    let root;
+    try {
+      root = await window.showDirectoryPicker();
+    } catch {
+      return; // Cancelled.
+    }
+    reading = true;
+    button.disabled = true;
+    notice.textContent = "Reading the folder…";
+    try {
+      read = await readFolder(root, maxFiles, maxBytes, (count) => {
+        notice.textContent = `Reading the folder… ${count} files so far.`;
+      });
+      folderInput.value = "";
+      show();
+    } catch {
+      read = null;
+      notice.textContent = "The folder could not be read.";
+    } finally {
+      reading = false;
+      button.disabled = submitted;
+    }
+  }
   window.addEventListener("pageshow", () => {
     // Coming back with the Back button restores the page as it was left: disabled.
     submitted = false;
@@ -81,7 +179,7 @@ function setUp(form) {
   });
 
   form.addEventListener("submit", (event) => {
-    if (submitted) {
+    if (submitted || reading) {
       event.preventDefault();
       return;
     }
@@ -110,5 +208,5 @@ if (typeof document !== "undefined") {
   });
 }
 if (typeof module !== "undefined") {
-  module.exports = { selectFiles, setUp, summary };
+  module.exports = { readFolder, selectFiles, setUp, summary };
 }
