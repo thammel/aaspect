@@ -1,4 +1,7 @@
-"""Turn a submitted upload form into domain uploads and a version choice."""
+"""Turn a submitted upload form into domain uploads, a version choice and templates."""
+
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
@@ -15,9 +18,23 @@ VERSION_CHOICES = (
     *((version.value, version.value) for version in NEWEST_FIRST),
 )
 _MAX_NAME_LENGTH = 200
-# The form has two fields; anything beyond that is not from our page.
+# The form has one field besides its files; anything beyond that is not from our page.
 _MAX_FIELDS = 4
 _MAX_FIELD_BYTES = 1024
+
+
+@dataclass(frozen=True, slots=True)
+class Submission:
+    uploads: list[Upload]
+    version: VersionChoice
+    # Submodel templates of the uploader's own, checked against before IDTA's.
+    templates: list[Upload]
+
+
+@dataclass(frozen=True, slots=True)
+class TemplateLimits:
+    max_files: int
+    max_bytes: int
 
 
 class UploadRejected(Exception):
@@ -27,25 +44,46 @@ class UploadRejected(Exception):
         self.message = message
 
 
-async def read_form(request: Request, max_files: int) -> tuple[list[Upload], VersionChoice]:
+async def read_form(request: Request, max_files: int, limits: TemplateLimits) -> Submission:
     try:
         async with request.form(
-            max_files=max_files, max_fields=_MAX_FIELDS, max_part_size=_MAX_FIELD_BYTES
+            max_files=max_files + limits.max_files,
+            max_fields=_MAX_FIELDS,
+            max_part_size=_MAX_FIELD_BYTES,
         ) as form:
             version = _version(form.get("version"))
-            files = [item for item in form.getlist("files") if isinstance(item, UploadFile)]
-            contents = [(item.filename or "", await item.read()) for item in files]
+            files = await _contents(form.getlist("files"))
+            templates = await _contents(form.getlist("templates"))
     except HTTPException as error:
         # Starlette reports multipart limits (too many files, oversized field) this way.
         raise UploadRejected(400, str(error.detail)) from error
+    uploads = _uploads(files)
+    if not uploads:
+        raise UploadRejected(400, "Choose at least one file.")
+    if len(uploads) > max_files:
+        raise UploadRejected(400, f"At most {max_files} files can be analyzed at once.")
+    chosen = _uploads(templates)
+    if len(chosen) > limits.max_files:
+        raise UploadRejected(400, f"At most {limits.max_files} template files can be uploaded.")
+    if sum(len(upload.content) for upload in chosen) > limits.max_bytes:
+        raise UploadRejected(
+            413, f"Template files may hold at most {limits.max_bytes // 2**20} MB together."
+        )
+    return Submission(uploads, version, chosen)
+
+
+async def _contents(items: Sequence[object]) -> list[tuple[str, bytes]]:
+    return [
+        (item.filename or "", await item.read()) for item in items if isinstance(item, UploadFile)
+    ]
+
+
+def _uploads(contents: list[tuple[str, bytes]]) -> list[Upload]:
     # A file input left empty still sends one part, without a name or content. A named
     # empty file is kept, so the report lists it as unreadable instead of losing it.
     chosen = [(name, content) for name, content in contents if name or content]
     names = unique_names([name for name, _ in chosen])
-    uploads = [Upload(name, content) for name, (_, content) in zip(names, chosen, strict=True)]
-    if not uploads:
-        raise UploadRejected(400, "Choose at least one file.")
-    return uploads, version
+    return [Upload(name, content) for name, (_, content) in zip(names, chosen, strict=True)]
 
 
 def unique_names(names: list[str]) -> list[str]:

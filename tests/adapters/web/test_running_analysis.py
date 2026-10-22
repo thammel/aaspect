@@ -30,7 +30,10 @@ class TestRunningAnalysis(unittest.TestCase):
         self.running, self.release = threading.Event(), threading.Event()
 
         def stepwise(
-            uploads: Sequence[Upload], version: VersionChoice, progress: Progress
+            uploads: Sequence[Upload],
+            version_choice: VersionChoice,
+            progress: Progress,
+            templates: Sequence[Upload] = (),
         ) -> Report:
             progress(running_report())
             self.running.set()
@@ -63,7 +66,12 @@ class TestRunningAnalysis(unittest.TestCase):
         self.assertEqual(busy.status_code, 503)
 
     def test_crashed_analysis_fails_its_unfinished_steps(self) -> None:
-        def crash(uploads: Sequence[Upload], version: VersionChoice, progress: Progress) -> Report:
+        def crash(
+            uploads: Sequence[Upload],
+            version_choice: VersionChoice,
+            progress: Progress,
+            templates: Sequence[Upload] = (),
+        ) -> Report:
             progress(running_report())
             raise RuntimeError("boom")
 

@@ -53,7 +53,14 @@ class Catalogue:
     template has that one, by the semanticId without its IRDI version: Handover
     Documentation 1.2 and 2.0 differ only there."""
 
-    def __init__(self, files: Iterable[TemplateFile]) -> None:
+    def __init__(
+        self,
+        files: Iterable[TemplateFile],
+        base: "Catalogue | None" = None,
+        problems: Iterable[CatalogueProblem] = (),
+    ) -> None:
+        """`files` added to `base`, which stays as it is: the IDTA catalogue is compiled
+        once and extended per analysis by the templates uploaded with it."""
         self._by_exact: dict[str, dict[Tier, Template]] = {}
         self._by_key: dict[str, dict[Tier, Template]] = {}
         self.problems: list[CatalogueProblem] = []
@@ -61,6 +68,13 @@ class Catalogue:
         # or the same template in another serialization.
         self.duplicates = 0
         self.files = 0
+        if base is not None:
+            self._by_exact = {key: dict(tiers) for key, tiers in base._by_exact.items()}
+            self._by_key = {key: dict(tiers) for key, tiers in base._by_key.items()}
+            self.problems = list(base.problems)
+            self.duplicates = base.duplicates
+            self.files = base.files
+        self.problems.extend(problems)
         tiers = list(Tier)
         ordered = sorted(
             files,

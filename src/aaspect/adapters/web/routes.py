@@ -7,7 +7,12 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from aaspect.adapters.web.jobs import Analyses, Analyze
 from aaspect.adapters.web.store import ReportStore
-from aaspect.adapters.web.uploads import VERSION_CHOICES, UploadRejected, read_form
+from aaspect.adapters.web.uploads import (
+    VERSION_CHOICES,
+    TemplateLimits,
+    UploadRejected,
+    read_form,
+)
 from aaspect.domain.report import Report
 from aaspect.ports.report_writer import ReportWriter
 
@@ -26,6 +31,7 @@ class WebLimits:
     max_files: int
     max_concurrent_analyses: int
     max_stored_reports: int
+    templates: TemplateLimits = TemplateLimits(max_files=50, max_bytes=50 * 2**20)
 
 
 class Pages:
@@ -35,6 +41,8 @@ class Pages:
             "max_upload_mb": limits.max_upload_bytes // 2**20,
             "max_upload_bytes": limits.max_upload_bytes,
             "max_files": limits.max_files,
+            "max_template_files": limits.templates.max_files,
+            "max_template_mb": limits.templates.max_bytes // 2**20,
         }
 
     def render(self, name: str, status: int = 200, **context: object) -> Response:
@@ -63,6 +71,7 @@ class _Handlers:
         self._writer = writer
         self._pages = pages
         self._max_files = limits.max_files
+        self._template_limits = limits.templates
         self._store = ReportStore(limits.max_stored_reports)
         self._analyses = Analyses(analyze, self._store, limits.max_concurrent_analyses)
 
@@ -76,8 +85,10 @@ class _Handlers:
             return self._pages.error(503, _BUSY)
         handed_over = False
         try:
-            uploads, version = await read_form(request, self._max_files)
-            key, started = self._analyses.start(uploads, version)
+            submission = await read_form(request, self._max_files, self._template_limits)
+            key, started = self._analyses.start(
+                submission.uploads, submission.version, submission.templates
+            )
             handed_over = True
         except UploadRejected as rejected:
             return self._pages.error(rejected.status, rejected.message)

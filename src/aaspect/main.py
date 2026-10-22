@@ -32,6 +32,7 @@ from aaspect.adapters.templates.idta import IdtaTemplates
 from aaspect.adapters.web.access_log import MaskReportKeys
 from aaspect.adapters.web.app import create_app
 from aaspect.adapters.web.routes import WebLimits
+from aaspect.adapters.web.uploads import TemplateLimits
 from aaspect.app.analyze_corpus import AnalyzeCorpus
 from aaspect.config.settings import Settings, load_settings
 from aaspect.domain.metamodel import MetamodelVersion
@@ -70,6 +71,7 @@ def build_app(
         max_files=settings.max_files,
         max_concurrent_analyses=settings.max_concurrent_analyses,
         max_stored_reports=settings.max_stored_reports,
+        templates=TemplateLimits(settings.max_template_files, settings.max_template_bytes),
     )
     allowed_hosts = [host.strip() for host in settings.allowed_hosts.split(",") if host.strip()]
     return create_app(analyze.run, JsonReportWriter(), limits, allowed_hosts)

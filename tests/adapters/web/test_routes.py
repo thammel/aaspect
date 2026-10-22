@@ -9,6 +9,7 @@ from aaspect.adapters.report_json.writer import JsonReportWriter
 from aaspect.adapters.web.app import create_app
 from aaspect.adapters.web.jobs import Progress
 from aaspect.adapters.web.routes import WebLimits
+from aaspect.adapters.web.uploads import TemplateLimits
 from aaspect.domain.corpus import Upload
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Report
@@ -16,7 +17,11 @@ from aaspect.domain.version_selection import AutoOrder, VersionChoice
 from tests.adapters.web.reports import XSS, full_report
 
 LIMITS = WebLimits(
-    max_upload_bytes=10_000, max_files=3, max_concurrent_analyses=1, max_stored_reports=2
+    max_upload_bytes=10_000,
+    max_files=3,
+    max_concurrent_analyses=1,
+    max_stored_reports=2,
+    templates=TemplateLimits(max_files=2, max_bytes=100),
 )
 
 HOSTS = ["testserver"]
@@ -25,11 +30,17 @@ HOSTS = ["testserver"]
 class FakeAnalyze:
     def __init__(self) -> None:
         self.calls: list[tuple[list[str], VersionChoice]] = []
+        self.templates: list[list[str]] = []
 
     def __call__(
-        self, uploads: Sequence[Upload], version: VersionChoice, progress: Progress
+        self,
+        uploads: Sequence[Upload],
+        version_choice: VersionChoice,
+        progress: Progress,
+        templates: Sequence[Upload] = (),
     ) -> Report:
-        self.calls.append(([upload.name for upload in uploads], version))
+        self.calls.append(([upload.name for upload in uploads], version_choice))
+        self.templates.append([template.name for template in templates])
         progress(full_report())
         return full_report()
 
@@ -72,6 +83,25 @@ class TestRoutes(unittest.TestCase):
     def test_named_empty_file_reaches_the_analysis(self) -> None:
         self._upload(_files("empty.json", content=b"") + _files("", content=b""))
         self.assertEqual(self.analyze.calls, [(["empty.json"], AutoOrder.OLDEST_FIRST)])
+
+    def test_templates_reach_the_analysis_apart_from_the_files(self) -> None:
+        templates = [("templates", ("mine.json", b"{}", "application/json"))]
+        self._upload(_files("a.json") + templates)
+        self.assertEqual(self.analyze.calls[-1][0], ["a.json"])
+        self.assertEqual(self.analyze.templates[-1], ["mine.json"])
+
+    def test_template_limits(self) -> None:
+        too_many = [
+            ("templates", (f"t{n}.json", b"{}", "application/json"))
+            for n in range(LIMITS.templates.max_files + 1)
+        ]
+        self.assertEqual(self._upload(_files("a.json") + too_many).status_code, 400)
+        big = [("templates", ("big.json", b" " * (LIMITS.templates.max_bytes + 1), "x/y"))]
+        self.assertEqual(self._upload(_files("a.json") + big).status_code, 413)
+        self.assertEqual(self.analyze.calls, [])
+
+    def test_the_form_offers_templates(self) -> None:
+        self.assertIn('name="templates"', self.client.get("/").text)
 
     def test_version_choices(self) -> None:
         for value, choice in (
@@ -126,7 +156,12 @@ class TestRoutes(unittest.TestCase):
     def test_busy_server_answers_503_before_reading_uploads(self) -> None:
         started, release = threading.Event(), threading.Event()
 
-        def slow(uploads: Sequence[Upload], version: VersionChoice, progress: Progress) -> Report:
+        def slow(
+            uploads: Sequence[Upload],
+            version_choice: VersionChoice,
+            progress: Progress,
+            templates: Sequence[Upload] = (),
+        ) -> Report:
             started.set()
             release.wait(10)
             return full_report()

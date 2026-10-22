@@ -24,6 +24,9 @@ class Settings:
     max_archive_entries: int = 10_000
     max_compression_ratio: int = 200
     max_aas_parts: int = 100
+    # Submodel templates uploaded with one analysis, beside the files to analyze.
+    max_template_files: int = 50
+    max_template_bytes: int = 50 * _MIB
     # All documents of one analysis together, including parts unpacked from packages.
     max_document_bytes: int = 1024 * _MIB
     max_violations_per_document: int = 1000

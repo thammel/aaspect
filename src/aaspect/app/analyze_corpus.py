@@ -13,6 +13,7 @@ from aaspect.app import (
 from aaspect.app.after_import import after_import
 from aaspect.app.import_corpus import import_corpus
 from aaspect.app.schema_check import SchemaCheckResult
+from aaspect.app.uploaded_templates import with_uploaded
 from aaspect.domain.corpus import Corpus, Upload
 from aaspect.domain.metamodel import MetamodelVersion
 from aaspect.domain.report import Report, Section, SectionStatus, ShownError
@@ -71,8 +72,10 @@ class AnalyzeCorpus:
         uploads: Sequence[Upload],
         version_choice: VersionChoice,
         progress: Progress = lambda report: None,
+        templates: Sequence[Upload] = (),
     ) -> Report:
-        """The finished report; `progress` also receives every state on the way there."""
+        """The finished report; `progress` also receives every state on the way there.
+        `templates` are submodel templates to check against before IDTA's."""
         # One upload of crafted files could otherwise keep the workers and the database
         # busy for hours. The limit covers all steps together.
         deadline = time.monotonic() + self._time_limit
@@ -84,7 +87,8 @@ class AnalyzeCorpus:
             return seconds_left() < 0
 
         files = tuple(upload.name for upload in uploads)
-        sections = {key: self._waiting(key) for key in _TITLES}
+        checks_templates = self._templates is not None or bool(templates)
+        sections = {key: self._waiting(key, checks_templates) for key in _TITLES}
 
         def publish(key: str, section: Section) -> Report:
             sections[key] = section
@@ -105,7 +109,8 @@ class AnalyzeCorpus:
             if schema.section.status is SectionStatus.FAILED
             else [(document.label, outcome.version) for document, outcome in schema.outcomes]
         )
-        return self._graph_steps(corpus, version_choice, versions, seconds_left, publish)
+        source = with_uploaded(self._templates, templates, self._reader, self._parser)
+        return self._graph_steps(corpus, version_choice, versions, seconds_left, publish, source)
 
     def _check_schema(
         self,
@@ -120,10 +125,10 @@ class AnalyzeCorpus:
         except Exception as error:  # One failing analysis must not take the whole report down.
             return SchemaCheckResult(_failed(_SCHEMA, error))
 
-    def _waiting(self, key: str) -> Section:
+    def _waiting(self, key: str, checks_templates: bool) -> Section:
         if key != _SCHEMA and (self._graph_store is None or self._parser is None):
             return _skipped(key, "No graph database is configured.")
-        if key == _TEMPLATES and self._templates is None:
+        if key == _TEMPLATES and not checks_templates:
             return _skipped(key, "No submodel templates are configured.")
         return Section(key, _TITLES[key], SectionStatus.WAITING)
 
@@ -134,6 +139,7 @@ class AnalyzeCorpus:
         versions: list[tuple[str, MetamodelVersion | None]] | None,
         seconds_left: Callable[[], float],
         publish: Publish,
+        templates: TemplateSource | None,
     ) -> Report:
         """Import, then check and describe, in one graph that is dropped afterward."""
         assert self._graph_store is not None and self._parser is not None
@@ -147,7 +153,7 @@ class AnalyzeCorpus:
             with self._graph_store.open(seconds_left()) as graph:
                 imported = import_corpus(corpus.documents, self._parser, graph, expired)
                 publish(_GRAPH, graph_import_section.import_section(imported))
-                steps = after_import(graph, imported, choice, versions, expired, self._templates)
+                steps = after_import(graph, imported, choice, versions, expired, templates)
                 for key, step in steps:
                     publish(key, _running(key))
                     report = publish(key, _guarded(key, step))
@@ -157,7 +163,8 @@ class AnalyzeCorpus:
                 publish(_GRAPH, _failed(_GRAPH, error))
             # Dropping the database can fail after the steps have finished.
             for key in _AFTER_IMPORT:
-                if key not in done and self._waiting(key).status is SectionStatus.WAITING:
+                waiting = self._waiting(key, templates is not None)
+                if key not in done and waiting.status is SectionStatus.WAITING:
                     skipped = _skipped(key, "The graph import failed.")
                     report = publish(key, skipped if imported is None else _failed(key, error))
         assert report is not None

@@ -58,7 +58,7 @@ is over distinct contents: an object repeated identically in many files counts o
 Rankings list the 100 most frequent values and sum up the rest. Values are compared on
 their first 256 characters.
 
-### Submodel template conformance *(available: IDTA templates; planned: uploaded templates)*
+### Submodel template conformance *(available)*
 
 - Match each submodel to its IDTA submodel template by its semanticId, ignoring the
   version of an IRDI. A current edition is preferred over a superseded one, and a
@@ -77,7 +77,10 @@ their first 256 characters.
   (CC BY 4.0) and checked against the hashes in
   `src/aaspect/adapters/templates/manifest.json`; AASpect ships none of them.
   `tools/template_manifest.py <commit>` moves to newer templates.
-- Custom templates can be uploaded in addition to the IDTA templates. *(planned)*
+- Own templates can be uploaded with an analysis, as AAS files (AASX, JSON or XML). They
+  are checked against before the IDTA templates, for that analysis only, and named
+  "uploaded" in the report; unreadable ones are listed. While the IDTA templates are not
+  available, the uploaded ones are used alone.
 
 ### Deployment
 
@@ -154,6 +157,8 @@ part: 1 MB).
 | `AASPECT_MAX_STORED_REPORTS` | `20` | Reports kept in memory; the oldest is dropped first. |
 | `AASPECT_MAX_DOCUMENT_BYTES` | `1073741824` (1 GB) | All documents of one analysis together, including parts unpacked from AASX packages. Documents beyond it are reported as not read. |
 | `AASPECT_ANALYSIS_TIME_LIMIT_SECONDS` | `600` (10 min) | Time for one analysis, all steps together. Documents not validated or imported by then are reported as not checked or not imported, and constraints not checked or analytics not computed by then are listed as such; a database query still running 5 seconds later is cancelled. Importing about 900 MB of dense XML into the graph took about 5 minutes on its own, so this may need to be raised for uploads near the size limit. |
+| `AASPECT_MAX_TEMPLATE_FILES` | `50` | Submodel template files uploaded with one analysis. |
+| `AASPECT_MAX_TEMPLATE_BYTES` | `52428800` (50 MB) | Those template files together. They are read like the corpus, with the same package limits. |
 
 ### AASX packages
 
