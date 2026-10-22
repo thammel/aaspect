@@ -65,9 +65,13 @@ their first 256 characters.
   superseded one over a withdrawn one; the report names which was used.
 - Report missing mandatory elements, cardinality violations, wrong element or value
   types (errors), and elements the template does not define, other idShorts and other
-  semanticId versions (notes). Elements are matched by semanticId, else by idShort;
-  numbered idShorts such as `Document{00}` match `Document01`. Collections, lists and
-  entities are compared level by level.
+  semanticId versions (notes). Elements are matched by semanticId, ignoring IRDI
+  versions also inside composite ids, else by idShort; numbered idShorts such as
+  `Document{00}` match `Document01`. Where a template offers alternatives (list item
+  kinds, interface variants sharing a semanticId), each element is compared with the
+  one it fits; wildcard elements (`arbitrary`) stand for any further elements of their
+  type. Collections, lists and entities are compared level by level. Submodels with more
+  than 100,000 elements are named, not checked.
 - The templates are downloaded at runtime from one pinned commit of IDTA's
   [submodel-templates](https://github.com/admin-shell-io/submodel-templates) repository
   (CC BY 4.0) and checked against the hashes in

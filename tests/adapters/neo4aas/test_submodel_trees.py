@@ -17,8 +17,12 @@ def _reference(value: str) -> dict:
     return {"type": "ExternalReference", "keys": [{"type": "GlobalReference", "value": value}]}
 
 
-def _item(text: str) -> dict:
-    return {"modelType": "Property", "valueType": "xs:string", "value": text}
+# Each item gets its own value type, so that the order of the rebuilt list shows.
+_ITEM_TYPES = [f"xs:type{n}" for n in range(12)]
+
+
+def _item(value_type: str) -> dict:
+    return {"modelType": "Property", "valueType": value_type, "value": "x"}
 
 
 _SUBMODEL = {
@@ -36,7 +40,7 @@ _SUBMODEL = {
                     "modelType": "SubmodelElementList",
                     "typeValueListElement": "Property",
                     "valueTypeListElement": "xs:string",
-                    "value": [_item(str(n)) for n in range(12)],
+                    "value": [_item(value_type) for value_type in _ITEM_TYPES],
                 },
                 {
                     "idShort": "Part",
@@ -87,8 +91,7 @@ class TestSubmodelTreesInNeo4j(unittest.TestCase):
         )
         items, part = sorted(group.children, key=lambda e: e.id_short or "")
         self.assertEqual(items.model_type, "SubmodelElementList")
-        self.assertEqual(len(items.children), 12)
-        self.assertEqual({child.value_type for child in items.children}, {"xs:string"})
+        self.assertEqual([child.value_type for child in items.children], _ITEM_TYPES)
         self.assertEqual(part.model_type, "Entity")
         self.assertEqual([(c.id_short, c.value_type) for c in part.children], [("Count", "xs:int")])
 

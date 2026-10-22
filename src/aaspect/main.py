@@ -66,15 +66,17 @@ def build_app(
         ),
         max_document_bytes=settings.max_document_bytes,
     )
+    graph_store = _graph_store(settings, resources)
     analyze = AnalyzeCorpus(
         reader,
         validator,
         version("aaspect"),
         pool.map,
         time_limit_seconds=settings.analysis_time_limit_seconds,
-        graph_store=_graph_store(settings, resources),
+        graph_store=graph_store,
         parser=Neo4aasEnvironmentParser(),
-        templates=_templates(settings),
+        # Templates are checked in the graph; without one, nothing is downloaded.
+        templates=_templates(settings) if graph_store else None,
     )
     limits = WebLimits(
         max_upload_bytes=settings.max_upload_bytes,
