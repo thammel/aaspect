@@ -4,12 +4,16 @@ repository.
     python tools/template_manifest.py <commit>
 
 Run it to move AASpect to newer templates, and review the diff of the manifest. Only
-names and hashes are written: the templates themselves are downloaded at runtime.
+names, sizes and hashes are written: the templates themselves are downloaded at runtime.
+Each file is downloaded once here to record its SHA-256, after checking it against the
+git hash the repository lists.
 """
 
+import hashlib
 import json
 import re
 import sys
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -17,6 +21,7 @@ from pathlib import Path
 REPOSITORY = "admin-shell-io/submodel-templates"
 MANIFEST = Path(__file__).resolve().parents[1] / "src/aaspect/adapters/templates/manifest.json"
 _TREE = "https://api.github.com/repos/{repository}/git/trees/{commit}?recursive=1"
+_RAW = "https://raw.githubusercontent.com/{repository}/{commit}/{path}"
 _FILE_VERSION = re.compile(r"IDTA[ _]?\d{4,5}[-_](\d+(?:-\d+)*)", re.IGNORECASE)
 _PREFIX = re.compile(r"^idta[ _]?\d{4,5}[-_\d]*_?")
 
@@ -27,6 +32,8 @@ def main(commit: str) -> None:
     if tree.get("truncated"):
         raise SystemExit("the tree listing is truncated")
     chosen = _choose([entry for entry in tree["tree"] if entry["type"] == "blob"])
+    for entry in chosen:
+        entry["sha256"] = _sha256(commit, entry)
     manifest = {
         "repository": REPOSITORY,
         "commit": commit,
@@ -56,6 +63,16 @@ def _choose(blobs: list[dict]) -> list[dict]:
             files.append(_entry(folder, best))
     _mark_current(files)
     return sorted(files, key=lambda f: f["path"])
+
+
+def _sha256(commit: str, entry: dict) -> str:
+    url = _RAW.format(repository=REPOSITORY, commit=commit, path=urllib.parse.quote(entry["path"]))
+    with urllib.request.urlopen(url) as reply:
+        content = reply.read()
+    blob = hashlib.sha1(f"blob {len(content)}\0".encode() + content, usedforsecurity=False)
+    if blob.hexdigest() != entry["sha"] or len(content) != entry["size"]:
+        raise SystemExit(f"{entry['path']}: download differs from the repository listing")
+    return hashlib.sha256(content).hexdigest()
 
 
 def _entry(folder: str, blob: dict) -> dict:

@@ -1,7 +1,7 @@
 """SubmodelElements as template conformance reads them, from a template or an instance."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Templates and instances nest no deeper than this; a deeper template is refused, and
 # deeper instance elements are never compared.
@@ -33,10 +33,11 @@ class Element:
     value_type: str | None = None
     children: tuple["Element", ...] = ()
     cardinality: Cardinality | None = None
+    # Elements are compared by it many times over.
+    key: str | None = field(init=False, repr=False, compare=False)
 
-    @property
-    def key(self) -> str | None:
-        return matching_key(self.semantic_id)
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "key", matching_key(self.semantic_id))
 
 
 def matching_key(semantic_id: str | None) -> str | None:

@@ -1,11 +1,10 @@
-from collections.abc import Sequence
 from typing import Protocol
 
-from aaspect.domain.templates.catalogue import TemplateFile
+from aaspect.domain.templates.catalogue import Catalogue
 
 
 class TemplateSource(Protocol):
-    def templates(self) -> Sequence[TemplateFile]:
-        """Every template file available. Raises `ShownError` when none can be had, e.g.
-        while their download fails."""
+    def catalogue(self) -> Catalogue:
+        """Every template available, compiled. Raises `ShownError` when there are none
+        yet, e.g. while their download has not succeeded; never waits for one."""
         ...

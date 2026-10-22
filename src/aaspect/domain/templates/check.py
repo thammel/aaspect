@@ -1,5 +1,6 @@
 """Compare a submodel with its template: which elements are missing, too many, mistyped."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -54,13 +55,13 @@ def _compare_level(
     expected: tuple[Element, ...], actual: tuple[Element, ...], path: str, found: list[Deviation]
 ) -> None:
     shared = _shared_keys(expected)
+    by_key: dict[str, list[int]] = {}
+    for index, candidate in enumerate(actual):
+        if candidate.key is not None:
+            by_key.setdefault(candidate.key, []).append(index)
     claimed: set[int] = set()
     for element in expected:
-        matches = [
-            index
-            for index, candidate in enumerate(actual)
-            if index not in claimed and _matches(element, candidate, element.key in shared)
-        ]
+        matches = _matches(element, actual, by_key, element.key in shared, claimed)
         claimed.update(matches)
         here = _join(path, element.id_short)
         _check_count(element, len(matches), here, found)
@@ -78,12 +79,26 @@ def _compare_level(
             )
 
 
-def _matches(element: Element, candidate: Element, shared_key: bool) -> bool:
-    if element.key is None or shared_key:
-        if element.key is not None and candidate.key != element.key:
-            return False
-        return id_short_matches(element.id_short, candidate.id_short)
-    return candidate.key == element.key
+def _matches(
+    element: Element,
+    actual: tuple[Element, ...],
+    by_key: dict[str, list[int]],
+    shared_key: bool,
+    claimed: set[int],
+) -> list[int]:
+    """Indexes of the unclaimed elements matching `element`: by semanticId, and also by
+    idShort where siblings share it; by idShort alone where it has none."""
+    if element.key is None:
+        pool: Iterable[int] = range(len(actual))
+    else:
+        pool = by_key.get(element.key, ())
+        if not shared_key:
+            return [index for index in pool if index not in claimed]
+    return [
+        index
+        for index in pool
+        if index not in claimed and id_short_matches(element.id_short, actual[index].id_short)
+    ]
 
 
 def _check_count(element: Element, count: int, path: str, found: list[Deviation]) -> None:

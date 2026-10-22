@@ -124,7 +124,7 @@ def _templates(settings: Settings) -> IdtaTemplates | None:
     if not settings.templates_url:
         return None
     templates = IdtaTemplates(settings.templates_url)
-    templates.prefetch()
+    templates.start()
     return templates
 
 

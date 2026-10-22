@@ -7,7 +7,7 @@ from aaspect.app.template_conformance import check_templates, load_catalogue, or
 from aaspect.domain.blocks import Finding, Location, Table
 from aaspect.domain.id_collisions import Occurrence
 from aaspect.domain.report import SectionStatus, ShownError
-from aaspect.domain.templates.catalogue import TemplateFile, Tier
+from aaspect.domain.templates.catalogue import Catalogue, TemplateFile, Tier
 from aaspect.domain.templates.elements import Element
 from aaspect.domain.templates.instances import SubmodelRef
 from tests.app.graph_fakes import FixedSubmodels
@@ -39,10 +39,10 @@ class FixedTemplates:
     def __init__(self, files: Sequence[TemplateFile] | Exception) -> None:
         self.files = files
 
-    def templates(self) -> Sequence[TemplateFile]:
+    def catalogue(self) -> Catalogue:
         if isinstance(self.files, Exception):
             raise self.files
-        return self.files
+        return Catalogue(self.files)
 
 
 _SOURCE = FixedTemplates([TemplateFile("Nameplate 3.0", Tier.CURRENT, _TEMPLATE)])
@@ -78,20 +78,33 @@ class TestCheckTemplates(unittest.TestCase):
         )
 
     def test_stops_between_chunks_at_the_time_limit(self) -> None:
-        refs = [SubmodelRef(f"n{i}", None, "urn:nameplate") for i in range(3)]
+        refs = [SubmodelRef(f"n{i}", None, "urn:nameplate", elements=1) for i in range(3)]
         graph = FixedSubmodels(refs)
-        answers = iter([False, False, True])
-        original = template_conformance._CHUNK
-        template_conformance._CHUNK = 2
+        # Start, first chunk, its two submodels, second chunk.
+        answers = iter([False, False, False, False, True])
+        original = template_conformance._CHUNK_ELEMENTS
+        template_conformance._CHUNK_ELEMENTS = 2
         try:
             section = check_templates(
                 load_catalogue(_SOURCE), graph, _IMPORTED, lambda: next(answers, True)
             )
         finally:
-            template_conformance._CHUNK = original
+            template_conformance._CHUNK_ELEMENTS = original
         self.assertEqual(graph.fetched, [["n0", "n1"]])
         notes = [block.rule_id for block in section.blocks if isinstance(block, Finding)]
         self.assertIn("template-time-limit", notes)
+
+    def test_submodels_too_large_are_named_not_checked(self) -> None:
+        graph = FixedSubmodels(
+            [
+                SubmodelRef("n1", None, "urn:nameplate", elements=10**6),
+                SubmodelRef("n2", None, "urn:nameplate", elements=1),
+            ]
+        )
+        section = check_templates(load_catalogue(_SOURCE), graph, _IMPORTED)
+        self.assertEqual(graph.fetched, [["n2"]])
+        notes = [block.rule_id for block in section.blocks if isinstance(block, Finding)]
+        self.assertIn("template-too-large", notes)
 
     def test_without_templates_it_is_skipped(self) -> None:
         section = check_templates(load_catalogue(FixedTemplates([])), FixedSubmodels(), _IMPORTED)

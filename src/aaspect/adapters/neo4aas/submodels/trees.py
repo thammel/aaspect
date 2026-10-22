@@ -21,7 +21,11 @@ WITH submodel, head(collect(
 RETURN elementId(submodel) AS node,
        CASE WHEN submodel.occurrence_key IS :: INTEGER THEN submodel.occurrence_key END
            AS occurrence,
-       CASE WHEN semantic IS :: STRING THEN left(semantic, $prefix) END AS semantic
+       CASE WHEN semantic IS :: STRING THEN left(semantic, $prefix) END AS semantic,
+       COUNT {
+           MATCH (submodel)
+                 ((parent)-[:submodelElements|value|statements]->(child:SubmodelElement)){1,64}
+       } AS elements
 """
 
 # One row per element below each submodel, through collections and lists (value) and
@@ -52,7 +56,7 @@ RETURN node,
 
 def submodel_refs(client: AASNeo4JClient) -> list[SubmodelRef]:
     records = client.execute_clause(_REFS, params={"prefix": VALUE_PREFIX}) or []
-    return [SubmodelRef(r["node"], r["occurrence"], r["semantic"]) for r in records]
+    return [SubmodelRef(r["node"], r["occurrence"], r["semantic"], r["elements"]) for r in records]
 
 
 def submodel_trees(client: AASNeo4JClient, nodes: Sequence[str]) -> list[InstanceSubmodel]:
@@ -84,13 +88,16 @@ def _tree(root: str, rows: list[Any]) -> tuple[Element, ...]:
 
 
 def _depths(root: str, children: dict[str, list[Any]]) -> dict[str, int]:
+    """Each element's level. An element reached twice keeps its first place: elements are
+    not shared today, and a cycle must not loop forever if that ever changes."""
     depth: dict[str, int] = {}
     pending = [(root, 0)]
     while pending:
         parent, level = pending.pop()
         for row in children.get(parent, []):
-            depth[row["id"]] = level + 1
-            pending.append((row["id"], level + 1))
+            if row["id"] not in depth:
+                depth[row["id"]] = level + 1
+                pending.append((row["id"], level + 1))
     return depth
 
 

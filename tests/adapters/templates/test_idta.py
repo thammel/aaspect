@@ -1,21 +1,27 @@
+import hashlib
 import json
+import time
 import unittest
 
-from aaspect.adapters.templates.idta import IdtaTemplates, _git_blob_sha
+from aaspect.adapters.templates import idta
+from aaspect.adapters.templates.idta import IdtaTemplates
 from aaspect.domain.report import ShownError
 from aaspect.domain.templates.catalogue import Tier
 
-_CONTENT = json.dumps({"submodels": []}).encode()
+_CONTENT = json.dumps(
+    {"submodels": [{"id": "urn:t", "semanticId": {"keys": [{"value": "urn:nameplate"}]}}]}
+).encode()
 
 
-def _manifest(sha: str) -> dict:
+def _manifest(content: bytes = _CONTENT) -> dict:
     return {
         "repository": "owner/repo",
         "commit": "abc",
         "files": [
             {
                 "path": "published/Name plate/1/0/IDTA 1-0_Template.json",
-                "sha": sha,
+                "size": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
                 "tier": "current",
                 "version": [1, 0],
             }
@@ -24,70 +30,83 @@ def _manifest(sha: str) -> dict:
 
 
 class TestIdtaTemplates(unittest.TestCase):
-    def test_downloads_the_pinned_files_once(self) -> None:
-        fetched: list[str] = []
+    def test_downloads_the_pinned_files_and_compiles_them(self) -> None:
+        fetched: list[tuple[str, int]] = []
 
-        def fetch(url: str) -> bytes:
-            fetched.append(url)
+        def fetch(url: str, size: int, deadline: float) -> bytes:
+            fetched.append((url, size))
             return _CONTENT
 
-        source = IdtaTemplates("https://mirror/", fetch, _manifest(_git_blob_sha(_CONTENT)))
-        [template_file] = source.templates()
-        source.templates()
+        source = IdtaTemplates("https://mirror/", fetch, _manifest())
+        self.assertTrue(source.load())
+        template = source.catalogue().lookup("urn:nameplate")
+        assert template is not None
+        self.assertEqual((template.name, template.tier), ("IDTA 1-0_Template", Tier.CURRENT))
         self.assertEqual(
             fetched,
-            ["https://mirror/owner/repo/abc/published/Name%20plate/1/0/IDTA%201-0_Template.json"],
-        )
-        self.assertEqual(
-            (template_file.name, template_file.tier, template_file.version),
-            ("IDTA 1-0_Template", Tier.CURRENT, (1, 0)),
+            [
+                (
+                    "https://mirror/owner/repo/abc/published/Name%20plate/1/0/IDTA%201-0_Template.json",
+                    len(_CONTENT),
+                )
+            ],
         )
 
-    def test_changed_content_is_refused_and_retried_later(self) -> None:
-        calls = []
-
-        def fetch(url: str) -> bytes:
-            calls.append(url)
-            return b'{"submodels": "changed"}'
-
-        source = IdtaTemplates(
-            fetch=fetch, manifest=_manifest(_git_blob_sha(_CONTENT)), retry_seconds=3600
-        )
-        with (
-            self.assertLogs("aaspect.adapters.templates.idta", "WARNING"),
-            self.assertRaises(ShownError),
-        ):
-            source.templates()
+    def test_unavailable_until_loaded_without_waiting(self) -> None:
+        source = IdtaTemplates(fetch=lambda *_: _CONTENT, manifest=_manifest())
         with self.assertRaises(ShownError):
-            source.templates()
-        self.assertEqual(len(calls), 1)
+            source.catalogue()
 
-    def test_retries_after_the_wait(self) -> None:
+    def test_changed_content_is_refused(self) -> None:
+        source = IdtaTemplates(fetch=lambda *_: b'{"submodels": []}', manifest=_manifest())
+        with self.assertLogs("aaspect.adapters.templates.idta", "WARNING"):
+            self.assertFalse(source.load())
+        with self.assertRaises(ShownError):
+            source.catalogue()
+
+    def test_start_retries_in_the_background(self) -> None:
         answers = iter([OSError("offline"), _CONTENT])
 
-        def fetch(url: str) -> bytes:
+        def fetch(url: str, size: int, deadline: float) -> bytes:
             answer = next(answers)
             if isinstance(answer, Exception):
                 raise answer
             return answer
 
-        source = IdtaTemplates(
-            fetch=fetch, manifest=_manifest(_git_blob_sha(_CONTENT)), retry_seconds=0
-        )
-        with (
-            self.assertLogs("aaspect.adapters.templates.idta", "WARNING"),
-            self.assertRaises(ShownError),
-        ):
-            source.templates()
-        self.assertEqual(len(source.templates()), 1)
+        source = IdtaTemplates(fetch=fetch, manifest=_manifest(), retry_seconds=0.01)
+        with self.assertLogs("aaspect.adapters.templates.idta", "WARNING"):
+            source.start()
+            for _ in range(500):
+                try:
+                    source.catalogue()
+                    break
+                except ShownError:
+                    time.sleep(0.01)
+        self.assertEqual(len(source.catalogue()), 1)
 
-    def test_the_shipped_manifest_lists_only_paths_and_hashes(self) -> None:
-        manifest = IdtaTemplates(fetch=lambda url: b"")._manifest
+    def test_only_https_addresses(self) -> None:
+        for url in ("http://mirror", "file:///etc", "ftp://mirror"):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                IdtaTemplates(url, manifest=_manifest())
+
+    def test_the_shipped_manifest_lists_only_paths_sizes_and_hashes(self) -> None:
+        manifest = IdtaTemplates()._manifest
         self.assertEqual(manifest["repository"], "admin-shell-io/submodel-templates")
         self.assertTrue(manifest["files"])
         for entry in manifest["files"]:
-            self.assertEqual(set(entry), {"path", "sha", "size", "family", "version", "tier"})
+            self.assertEqual(
+                set(entry), {"path", "sha", "sha256", "size", "family", "version", "tier"}
+            )
             self.assertIn(entry["tier"], ("current", "superseded", "withdrawn"))
+
+
+class TestFetch(unittest.TestCase):
+    def test_refuses_other_schemes_and_redirects(self) -> None:
+        handlers = {type(handler).__name__ for handler in vars(idta._OPENER)["handlers"]}
+        self.assertNotIn("FileHandler", handlers)
+        self.assertNotIn("FTPHandler", handlers)
+        self.assertNotIn("HTTPRedirectHandler", handlers)
+        self.assertIn("_NoRedirects", handlers)
 
 
 if __name__ == "__main__":
