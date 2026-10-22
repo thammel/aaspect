@@ -1,8 +1,8 @@
 """Everything that differs between versions of the AAS metamodel, in one place.
 
-A new version is added here: its name, its XML namespace, and the official schemas,
-which AASpect downloads at startup from IDTA's aas-specs-metamodel repository, pinned to
-one commit and checked by size and SHA-256.
+A new version is added here: its name, its XML namespace, the official schemas, which
+AASpect downloads at startup from IDTA's aas-specs-metamodel repository, pinned to one
+commit and checked by size and SHA-256, and the rule set of the constraint checker.
 """
 
 from collections.abc import Mapping
@@ -23,6 +23,8 @@ class VersionDetails:
     xml_namespace: str
     json_schema: PinnedFile
     xml_schema: PinnedFile
+    # The name neo4aas's constraint checker gives this version's rules.
+    constraint_rules: str
 
 
 _SCHEMAS = "admin-shell-io/aas-specs-metamodel"
@@ -50,6 +52,7 @@ DETAILS: Mapping[MetamodelVersion, VersionDetails] = {
             52017,
             "40eb128b16846f971d02d14040ce0a0ce9d1041ede7001e955b7227b155d1e7a",
         ),
+        constraint_rules="3.0",
     ),
     MetamodelVersion.V3_1: VersionDetails(
         xml_namespace="https://admin-shell.io/aas/3/1",
@@ -67,6 +70,7 @@ DETAILS: Mapping[MetamodelVersion, VersionDetails] = {
             64018,
             "9270966e703a7305ff17920cff1efe8ef032d7e9f4949b2a6e5173f4994bff77",
         ),
+        constraint_rules="3.1",
     ),
     MetamodelVersion.V3_2: VersionDetails(
         xml_namespace="https://admin-shell.io/aas/3/2",
@@ -84,6 +88,7 @@ DETAILS: Mapping[MetamodelVersion, VersionDetails] = {
             68327,
             "c04279e2660632f333c34581bdd026f287277f2aacd269baf6adadd499e271b0",
         ),
+        constraint_rules="3.2",
     ),
 }
 

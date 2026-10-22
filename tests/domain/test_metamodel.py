@@ -15,6 +15,8 @@ class TestVersionDetails(unittest.TestCase):
         }
         self.assertEqual(len(namespaces), len(DETAILS))
         self.assertEqual(len(schemas), len(DETAILS))
+        rules = {details.constraint_rules for details in DETAILS.values()}
+        self.assertEqual(len(rules), len(DETAILS))
 
 
 if __name__ == "__main__":

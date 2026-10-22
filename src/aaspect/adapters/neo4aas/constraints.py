@@ -19,7 +19,7 @@ from aaspect.domain.constraints.violations import (
     RuleStatus,
 )
 from aaspect.domain.id_collisions import Occurrence
-from aaspect.domain.metamodel import MetamodelVersion
+from aaspect.domain.metamodel import DETAILS, MetamodelVersion
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def check_constraints(
     occurrences: Sequence[Occurrence],
     expired: Callable[[], bool],
 ) -> ConstraintResult:
-    checker = AASConstraintChecker(client, version.value)
+    checker = AASConstraintChecker(client, DETAILS[version].constraint_rules)
     rules = []
     for rule in checker.constraint_ids:
         if expired():
