@@ -1,14 +1,17 @@
 import dataclasses
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Generator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from typing import Any
 
 from neo4aas.core.client import AAS_NEO4J_MODEL_CONFIG, AASNeo4JClient
 from neo4aas.core.utils import irdi_base
 from neo4j.exceptions import DriverError, Neo4jError
 
+from aaspect.adapters.neo4aas.analytics.statistics import Neo4aasStatistics
 from aaspect.adapters.neo4aas.constraints import check_constraints
 from aaspect.adapters.neo4aas.errors import content_fault
+from aaspect.domain.analytics.figures import AttributeUse, CorpusSizes, Measure, Tally
 from aaspect.domain.constraints.violations import ConstraintResult
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 from aaspect.domain.metamodel import MetamodelVersion
@@ -57,9 +60,19 @@ SET reference.keys_value = [rename.original] + reference.keys_value[1..],
 
 
 class Neo4aasGraph:
-    def __init__(self, client: AASNeo4JClient) -> None:
+    """`shown` turns a failure of the database into the error the report shows; errors
+    are translated here, since the steps that query the graph keep their own failures
+    from ending the analysis."""
+
+    def __init__(
+        self,
+        client: AASNeo4JClient,
+        shown: Callable[[DriverError | Neo4jError], Exception] = lambda error: error,
+    ) -> None:
         self._client = client
+        self._shown = shown
         self._occurrences: Sequence[Occurrence] = ()
+        self._statistics = Neo4aasStatistics(client)
 
     def upload(self, environments: Sequence[Environment]) -> None:
         # neo4aas reads only the three Identifiable lists, so joining them is the same as
@@ -80,6 +93,9 @@ class Neo4aasGraph:
             # neo4aas trusts the structure it is given; schema-invalid content fails with
             # whatever error the first unexpected value causes.
             raise ValueError(f"content cannot be stored: {type(error).__name__}") from error
+
+    def _translated(self) -> AbstractContextManager[None]:
+        return _translating(self._shown)
 
     def link_references(self) -> None:
         self._client.resolve_references()
@@ -113,7 +129,36 @@ class Neo4aasGraph:
     def check_constraints(
         self, version: MetamodelVersion, expired: Callable[[], bool]
     ) -> ConstraintResult:
-        return check_constraints(self._client, version, self._occurrences, expired)
+        with self._translated():
+            return check_constraints(self._client, version, self._occurrences, expired)
+
+    def sizes(self) -> CorpusSizes:
+        with self._translated():
+            return self._statistics.sizes()
+
+    def tally(self, measure: Measure) -> Tally[str | None]:
+        with self._translated():
+            return self._statistics.tally(measure)
+
+    def submodel_kinds(self) -> Tally[tuple[str | None, str | None]]:
+        with self._translated():
+            return self._statistics.submodel_kinds()
+
+    def element_types(self) -> Tally[frozenset[str]]:
+        with self._translated():
+            return self._statistics.element_types()
+
+    def attribute_use(self) -> tuple[AttributeUse, ...]:
+        with self._translated():
+            return self._statistics.attribute_use()
+
+
+@contextmanager
+def _translating(shown: Callable[[DriverError | Neo4jError], Exception]) -> Generator[None]:
+    try:
+        yield
+    except (DriverError, Neo4jError) as error:
+        raise shown(error) from error
 
 
 def _id_shorts_as_text(environment: Environment) -> None:

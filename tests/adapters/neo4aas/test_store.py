@@ -93,6 +93,33 @@ class TestDozerDbStore(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 30)
         self.assertIn("time limit", str(raised.exception))
 
+    def test_a_step_past_the_time_limit_says_so_inside_the_graph(self) -> None:
+        # Steps catch their own failures, so the reason must be set before the graph
+        # closes.
+        slow = "UNWIND range(1, 2000000000) AS x WITH x WHERE x < 0 RETURN count(*) AS n"
+        with (
+            mock.patch.object(store_module, "_GRACE_SECONDS", 0),
+            self.store.open(1) as graph,
+        ):
+            statistics = graph._statistics
+            with (
+                mock.patch.object(statistics, "sizes", lambda: graph._client.execute_clause(slow)),
+                self.assertRaises(ShownError) as raised,
+            ):
+                graph.sizes()
+        self.assertIn("time limit", str(raised.exception))
+
+    def test_a_failing_query_inside_the_graph_gives_the_plain_reason(self) -> None:
+        with (
+            self.store.open() as graph,
+            mock.patch.object(
+                graph._statistics, "sizes", lambda: graph._client.execute_clause("NOT CYPHER")
+            ),
+            self.assertRaises(ShownError) as raised,
+        ):
+            graph.sizes()
+        self.assertEqual(str(raised.exception), store_module._FAILED)
+
     def test_database_exists_only_while_open(self) -> None:
         before = self._databases()
         with self.store.open() as graph:

@@ -90,20 +90,12 @@ class DozerDbStore:
                 )
                 try:
                     client.optimize_database()
-                    yield Neo4aasGraph(client)
+                    yield Neo4aasGraph(client, lambda error: _shown(error, watchdog))
                 finally:
                     watchdog.stop()
                     client.driver.close()
         except (DriverError, Neo4jError) as error:
-            if watchdog is not None and watchdog.fired:
-                raise ShownError(_CANCELLED) from error
-            # Driver messages name internal hosts and addresses; reports are public.
-            if isinstance(error, DriverError):
-                logger.warning("Graph database failed", exc_info=True)
-            else:
-                # The server's message can quote values from the uploaded files.
-                logger.warning("Graph database failed: %s", described(error))
-            raise ShownError(_FAILED) from error
+            raise _shown(error, watchdog) from error
 
     @contextmanager
     def _database(self) -> Generator[str]:
@@ -172,6 +164,18 @@ class DozerDbStore:
     def _system(self, query: LiteralString, **parameters: str) -> list[Record]:
         records, _, _ = self._driver.execute_query(query, parameters, database_="system")
         return records
+
+
+def _shown(error: DriverError | Neo4jError, watchdog: _Watchdog | None) -> ShownError:
+    if watchdog is not None and watchdog.fired:
+        return ShownError(_CANCELLED)
+    # Driver messages name internal hosts and addresses; reports are public.
+    if isinstance(error, DriverError):
+        logger.warning("Graph database failed", exc_info=error)
+    else:
+        # The server's message can quote values from the uploaded files.
+        logger.warning("Graph database failed: %s", described(error))
+    return ShownError(_FAILED)
 
 
 def _checked(name: str) -> str:
