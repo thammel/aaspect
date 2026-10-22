@@ -42,9 +42,9 @@ class TestEndToEnd(unittest.TestCase):
             self.assertIn("Version per file", client.get(str(response.url)).text)
             report = json.loads(client.get(str(response.url) + "/report.json").content)
 
-        section, graph_import, constraints = report["sections"]
+        section, *graph_steps = report["sections"]
         self.assertEqual(section["status"], "completed")
-        self.assertEqual((graph_import["status"], constraints["status"]), ("skipped", "skipped"))
+        self.assertEqual([step["status"] for step in graph_steps], ["skipped"] * 3)
         blocks = {block.get("title") or block["rule_id"]: block for block in section["blocks"]}
         self.assertEqual(
             blocks["Version per file"]["rows"],

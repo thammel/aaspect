@@ -1,8 +1,9 @@
 import copy
 import math
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 
+from aaspect.domain.analytics.figures import AttributeUse, CorpusSizes, Measure, Tally
 from aaspect.domain.constraints.violations import ConstraintResult
 from aaspect.domain.corpus import AasDocument
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
@@ -25,8 +26,37 @@ class FakeParser:
 NO_VIOLATIONS = ConstraintResult(())
 
 
-class RecordingGraph:
+class FixedStatistics:
+    """A corpus of one shell with one submodel holding two Properties."""
+
+    def __init__(self, tallies: Mapping[Measure, Tally[str | None]] | None = None) -> None:
+        self.tallies = tallies or {}
+        self.asked: list[str] = []
+
+    def sizes(self) -> CorpusSizes:
+        self.asked.append("sizes")
+        return CorpusSizes(1, 1, 2, 0, 0, 2, None, None)
+
+    def tally(self, measure: Measure) -> Tally[str | None]:
+        self.asked.append(measure.name)
+        return self.tallies.get(measure, Tally((), 0, 0))
+
+    def submodel_kinds(self) -> Tally[tuple[str | None, str | None]]:
+        self.asked.append("submodel_kinds")
+        return Tally(((("https://admin-shell.io/x", "X"), 1),), 1, 1)
+
+    def element_types(self) -> Tally[frozenset[str]]:
+        self.asked.append("element_types")
+        return Tally(((frozenset({"SubmodelElement", "Property"}), 2),), 2, 1)
+
+    def attribute_use(self) -> tuple[AttributeUse, ...]:
+        self.asked.append("attribute_use")
+        return (AttributeUse("Submodel", 1, (("semanticId", 1),)),)
+
+
+class RecordingGraph(FixedStatistics):
     def __init__(self, constraints: ConstraintResult | Exception = NO_VIOLATIONS) -> None:
+        super().__init__()
         self.calls: list[tuple[str, object]] = []
         self.batches: list[int] = []
         self.constraints = constraints

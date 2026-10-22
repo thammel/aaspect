@@ -3,8 +3,8 @@ import time
 import traceback
 from collections.abc import Callable, Sequence
 
-from aaspect.app import constraint_check, graph_import_section, schema_check
-from aaspect.app.import_corpus import import_corpus
+from aaspect.app import analytics, constraint_check, graph_import_section, schema_check
+from aaspect.app.import_corpus import ImportResult, import_corpus
 from aaspect.app.schema_check import SchemaCheckResult
 from aaspect.domain.corpus import Corpus, Upload
 from aaspect.domain.metamodel import MetamodelVersion
@@ -12,7 +12,7 @@ from aaspect.domain.report import Report, Section, SectionStatus, ShownError
 from aaspect.domain.version_selection import VersionChoice
 from aaspect.ports.corpus_reader import CorpusReader
 from aaspect.ports.environment_parser import EnvironmentParser
-from aaspect.ports.graph_store import GraphStore
+from aaspect.ports.graph_store import AnalysisGraph, GraphStore
 from aaspect.ports.schema_validator import SchemaValidator
 
 logger = logging.getLogger(__name__)
@@ -20,16 +20,19 @@ logger = logging.getLogger(__name__)
 type Progress = Callable[[Report], None]
 type Publish = Callable[[str, Section], Report]
 
-_SCHEMA, _GRAPH, _CONSTRAINTS = (
+_SCHEMA, _GRAPH, _CONSTRAINTS, _ANALYTICS = (
     schema_check.SECTION_KEY,
     graph_import_section.SECTION_KEY,
     constraint_check.SECTION_KEY,
+    analytics.SECTION_KEY,
 )
 _TITLES = {
     _SCHEMA: schema_check.SECTION_TITLE,
     _GRAPH: graph_import_section.SECTION_TITLE,
     _CONSTRAINTS: constraint_check.SECTION_TITLE,
+    _ANALYTICS: analytics.SECTION_TITLE,
 }
+_AFTER_IMPORT = (_CONSTRAINTS, _ANALYTICS)
 
 
 class AnalyzeCorpus:
@@ -118,28 +121,57 @@ class AnalyzeCorpus:
         seconds_left: Callable[[], float],
         publish: Publish,
     ) -> Report:
-        """Import, then check, in one graph that is dropped afterward."""
+        """Import, then check and describe, in one graph that is dropped afterward."""
         assert self._graph_store is not None and self._parser is not None
 
         def expired() -> bool:
             return seconds_left() < 0
 
-        imported = checked = None
+        imported = report = None
+        done: set[str] = set()
         try:
             with self._graph_store.open(seconds_left()) as graph:
                 imported = import_corpus(corpus.documents, self._parser, graph, expired)
                 publish(_GRAPH, graph_import_section.import_section(imported))
-                publish(_CONSTRAINTS, _running(_CONSTRAINTS))
-                checked = constraint_check.check_constraints(
-                    graph, imported, choice, versions, expired
-                )
+                for key, step in _after_import(graph, imported, choice, versions, expired):
+                    publish(key, _running(key))
+                    report = publish(key, _guarded(key, step))
+                    done.add(key)
         except Exception as error:  # One failing analysis must not take the whole report down.
             if imported is None:
                 publish(_GRAPH, _failed(_GRAPH, error))
-                return publish(_CONSTRAINTS, _skipped(_CONSTRAINTS, "The graph import failed."))
-            # Dropping the database can fail after the check has finished.
-            checked = checked or _failed(_CONSTRAINTS, error)
-        return publish(_CONSTRAINTS, checked)
+            # Dropping the database can fail after the steps have finished.
+            for key in _AFTER_IMPORT:
+                if key not in done:
+                    skipped = _skipped(key, "The graph import failed.")
+                    report = publish(key, skipped if imported is None else _failed(key, error))
+        assert report is not None
+        return report
+
+
+def _after_import(
+    graph: AnalysisGraph,
+    imported: ImportResult,
+    choice: VersionChoice,
+    versions: list[tuple[str, MetamodelVersion | None]] | None,
+    expired: Callable[[], bool],
+) -> list[tuple[str, Callable[[], Section]]]:
+    # Analytics first: a few aggregate queries, where the constraint check can take what is
+    # left of the time.
+    return [
+        (_ANALYTICS, lambda: analytics.analyze(graph, imported, expired)),
+        (
+            _CONSTRAINTS,
+            lambda: constraint_check.check_constraints(graph, imported, choice, versions, expired),
+        ),
+    ]
+
+
+def _guarded(key: str, step: Callable[[], Section]) -> Section:
+    try:
+        return step()
+    except Exception as error:  # One failing analysis must not take the whole report down.
+        return _failed(key, error)
 
 
 def _running(key: str) -> Section:

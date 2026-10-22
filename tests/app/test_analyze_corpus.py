@@ -79,6 +79,7 @@ class TestAnalyzeCorpus(unittest.TestCase):
             "Internal error (ConnectionError); the server log has the details.",
         )
         self.assertEqual(report.sections[2].reason, "The graph import failed.")
+        self.assertEqual(report.sections[3].reason, "The graph import failed.")
 
     def test_only_errors_written_for_the_report_show_their_text(self) -> None:
         graph = RecordingGraph(ShownError("The graph database failed."))
@@ -143,7 +144,7 @@ class TestAnalyzeCorpus(unittest.TestCase):
         report = analyze.run(UPLOADS, AUTO)
         self.assertEqual(
             [s.status for s in report.sections[1:]],
-            [SectionStatus.COMPLETED, SectionStatus.COMPLETED],
+            [SectionStatus.COMPLETED] * 3,
         )
 
     def test_failing_constraint_check_keeps_the_import(self) -> None:
@@ -157,13 +158,34 @@ class TestAnalyzeCorpus(unittest.TestCase):
         )
         report = analyze.run(UPLOADS, AUTO)
         self.assertEqual(
-            [s.status for s in report.sections[1:]], [SectionStatus.COMPLETED, SectionStatus.FAILED]
+            [s.status for s in report.sections[1:]],
+            [SectionStatus.COMPLETED, SectionStatus.FAILED, SectionStatus.COMPLETED],
         )
         self.assertEqual(
             report.sections[2].reason,
             "Internal error (RuntimeError); the server log has the details.",
         )
         self.assertTrue(store.closed)
+
+    def test_failing_analytics_keeps_the_constraint_check(self) -> None:
+        class BrokenStatistics(RecordingGraph):
+            def __getattribute__(self, name: str) -> object:
+                if name in ("sizes", "tally", "submodel_kinds", "element_types", "attribute_use"):
+                    raise RuntimeError("query broke")
+                return super().__getattribute__(name)
+
+        analyze = AnalyzeCorpus(
+            FakeReader(CORPUS),
+            FakeValidator({}),
+            "0.1.0",
+            graph_store=FakeStore(BrokenStatistics()),
+            parser=FakeParser({"a.json": {"submodels": []}}),
+        )
+        report = analyze.run(UPLOADS, AUTO)
+        self.assertEqual(
+            [s.status for s in report.sections[1:]],
+            [SectionStatus.COMPLETED, SectionStatus.COMPLETED, SectionStatus.FAILED],
+        )
 
     def test_progress_shows_each_step_starting_and_finishing(self) -> None:
         states: list[tuple[str, ...]] = []
@@ -182,12 +204,14 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertEqual(
             states,
             [
-                ("waiting", "waiting", "waiting"),
-                ("running", "waiting", "waiting"),
-                ("completed", "running", "waiting"),
-                ("completed", "completed", "waiting"),
-                ("completed", "completed", "running"),
-                ("completed", "completed", "completed"),
+                ("waiting", "waiting", "waiting", "waiting"),
+                ("running", "waiting", "waiting", "waiting"),
+                ("completed", "running", "waiting", "waiting"),
+                ("completed", "completed", "waiting", "waiting"),
+                ("completed", "completed", "waiting", "running"),
+                ("completed", "completed", "waiting", "completed"),
+                ("completed", "completed", "running", "completed"),
+                ("completed", "completed", "completed", "completed"),
             ],
         )
         self.assertTrue(report.finished)
@@ -197,7 +221,7 @@ class TestAnalyzeCorpus(unittest.TestCase):
         AnalyzeCorpus(FakeReader(CORPUS), FakeValidator({}), "0.1.0").run(
             UPLOADS, AUTO, lambda r: states.append(r.sections[1].status.value)
         )
-        self.assertEqual(states, ["skipped", "skipped", "skipped"])
+        self.assertEqual(states, ["skipped"] * 3)
 
     def test_time_limit_reaches_the_graph_import(self) -> None:
         analyze = AnalyzeCorpus(

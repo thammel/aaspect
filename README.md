@@ -28,17 +28,36 @@ analysis, view the results in the browser and download them as **JSON** or **PDF
   and located by file, object id and element path; an object shared by many files is
   listed once, with its first file and the number of files.
 
-### Analytics *(planned)*
+### Analytics *(available)*
 
-- **Submodels:** which submodels are used, and how often. Split into IDTA-standardized
-  and proprietary submodels.
-- **Semantic IDs:** which semantic IDs are used, which identification schemes
-  (ECLASS IRDI, IEC CDD IRDI, IRI, URN, UUID, …) and which dictionaries they point to.
+Computed in the graph right after the import, before the constraint check. Every count
+is over distinct contents: an object repeated identically in many files counts once.
+
+- **Corpus size and structure:** shells, submodels, SubmodelElements and
+  ConceptDescriptions; nesting depth of SubmodelElements and submodel references per
+  shell (count, min, max, mean, median, standard deviation).
+- **Submodels:** which submodels are used, and how often, grouped by semanticId and named
+  by their most frequent idShort. Split by the origin of the semanticId: IDTA
+  (`admin-shell.io`), ECLASS, IEC CDD or proprietary. This is read from the identifier,
+  not from the IDTA template catalogue: a template identified by an ECLASS IRDI counts as
+  ECLASS, and current and withdrawn templates are not told apart.
+- **Semantic IDs:** semanticIds and supplementalSemanticIds of SubmodelElements, their
+  identification schemes (IRDI, IRI, URN, UUID, other) and the dictionaries they point
+  to (ECLASS, IEC CDD, IDTA, other).
 - **Submodel element types:** distribution of `Property`, `SubmodelElementCollection`,
   `SubmodelElementList`, `MultiLanguageProperty`, `File`, …
-- **Value types:** which `valueType`s (`xs:string`, `xs:double`, …) are assigned.
-- **Metamodel attributes:** how often optional attributes are populated (`description`,
-  `displayName`, `category`, `semanticId`, `qualifiers`, …).
+- **Value types:** which `valueType`s (`xs:string`, `xs:double`, …) Properties and Ranges
+  carry.
+- **Metamodel attributes:** how often the optional attributes each kind of object can
+  have are filled (`description`, `displayName`, `category`, `semanticId`, `qualifiers`,
+  `extensions`, `embeddedDataSpecifications`, `administration`, …).
+- **Languages:** MultiLanguageProperty against Properties of `xs:string`, and the
+  language tags of MultiLanguageProperty values, descriptions and displayNames.
+- **Assets:** `assetKind`, identification schemes of `globalAssetId`s and the names of
+  `specificAssetIds`.
+
+Rankings list the 100 most frequent values and sum up the rest. Values are compared on
+their first 256 characters.
 
 ### Submodel template conformance *(planned)*
 
@@ -120,7 +139,7 @@ part: 1 MB).
 | `AASPECT_MAX_CONCURRENT_ANALYSES` | `2` | Analyses running at once. Further uploads get "busy, try again" before anything is read, so at most this many uploads are held in memory. |
 | `AASPECT_MAX_STORED_REPORTS` | `20` | Reports kept in memory; the oldest is dropped first. |
 | `AASPECT_MAX_DOCUMENT_BYTES` | `1073741824` (1 GB) | All documents of one analysis together, including parts unpacked from AASX packages. Documents beyond it are reported as not read. |
-| `AASPECT_ANALYSIS_TIME_LIMIT_SECONDS` | `600` (10 min) | Time for one analysis, all steps together. Documents not validated or imported by then are reported as not checked or not imported, and constraints not checked by then are listed as such; a database query still running 5 seconds later is cancelled. Importing about 900 MB of dense XML into the graph took about 5 minutes on its own, so this may need to be raised for uploads near the size limit. |
+| `AASPECT_ANALYSIS_TIME_LIMIT_SECONDS` | `600` (10 min) | Time for one analysis, all steps together. Documents not validated or imported by then are reported as not checked or not imported, and constraints not checked or analytics not computed by then are listed as such; a database query still running 5 seconds later is cancelled. Importing about 900 MB of dense XML into the graph took about 5 minutes on its own, so this may need to be raised for uploads near the size limit. |
 
 ### AASX packages
 
@@ -182,21 +201,22 @@ only on those two. `main.py` alone wires the adapters to the use-cases.
 ```text
 src/aaspect/
 ├── domain/        Analysis rules and result types: report sections, findings, tables,
-│                  version selection, grouping of violations. Pure Python, no I/O.
-│                  metamodel.py holds everything that differs between metamodel
-│                  versions: names, XML namespaces, pinned schemas.
+│                  version selection, grouping of violations, identifier classification
+│                  and analytics tables. Pure Python, no I/O. metamodel.py holds
+│                  everything that differs between metamodel versions: names, XML
+│                  namespaces, pinned schemas.
 ├── ports/         Interfaces the use-cases depend on: read uploads, validate a
-│                  document, write a report, parse and import into a graph,
-│                  download a pinned file.
+│                  document, write a report, parse and import into a graph, count
+│                  in it, download a pinned file.
 ├── app/           Use-cases: analyze a corpus, run the schema check, import a corpus
-│                  into a graph database.
+│                  into a graph database, check its constraints, describe it.
 ├── adapters/      Implementations of the ports, one package per outside concern:
 │   ├── files/         read JSON, XML and AASX uploads in memory, within limits
 │   ├── download/      download pinned files over HTTPS
 │   ├── schema/        validate with jsonschema-rs and lxml in isolated worker
 │   │                  processes
 │   ├── neo4aas/       convert documents, import them with neo4aas, one database
-│   │                  per analysis on DozerDB
+│   │                  per analysis on DozerDB; analytics/ holds the counting queries
 │   ├── report_json/   JSON report download
 │   └── web/           FastAPI + Jinja2 UI, templates/ and static/
 ├── config/        Settings from AASPECT_* environment variables
