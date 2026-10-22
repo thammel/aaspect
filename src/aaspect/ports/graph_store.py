@@ -6,6 +6,7 @@ from typing import Protocol
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 from aaspect.ports.constraint_checker import ConstraintChecker
 from aaspect.ports.corpus_statistics import CorpusStatistics
+from aaspect.ports.submodel_trees import SubmodelTrees
 
 
 class CorpusGraph(Protocol):
@@ -32,7 +33,7 @@ class CorpusGraph(Protocol):
         ...
 
 
-class AnalysisGraph(CorpusGraph, ConstraintChecker, CorpusStatistics, Protocol):
+class AnalysisGraph(CorpusGraph, ConstraintChecker, CorpusStatistics, SubmodelTrees, Protocol):
     """A graph the corpus is imported into and then analyzed."""
 
 

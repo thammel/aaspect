@@ -11,10 +11,12 @@ from neo4j.exceptions import DriverError, Neo4jError
 from aaspect.adapters.neo4aas.analytics.statistics import Neo4aasStatistics
 from aaspect.adapters.neo4aas.constraints import check_constraints
 from aaspect.adapters.neo4aas.errors import content_fault
+from aaspect.adapters.neo4aas.submodels import trees
 from aaspect.domain.analytics.figures import AttributeUse, CorpusSizes, Measure, Tally
 from aaspect.domain.constraints.violations import ConstraintResult
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 from aaspect.domain.metamodel import MetamodelVersion
+from aaspect.domain.templates.instances import InstanceSubmodel, SubmodelRef
 
 # Without the uniqueness constraint, so that collision variants can share their id once
 # it is restored. Repeats are still merged by id during the import.
@@ -151,6 +153,14 @@ class Neo4aasGraph:
     def attribute_use(self) -> tuple[AttributeUse, ...]:
         with self._translated():
             return self._statistics.attribute_use()
+
+    def submodel_refs(self) -> Sequence[SubmodelRef]:
+        with self._translated():
+            return trees.submodel_refs(self._client)
+
+    def submodel_trees(self, nodes: Sequence[str]) -> Sequence[InstanceSubmodel]:
+        with self._translated():
+            return trees.submodel_trees(self._client, nodes)
 
 
 @contextmanager
