@@ -55,8 +55,8 @@ class TestFindings(unittest.TestCase):
         try:
             tally = ConformanceTally()
             unique = [
-                Deviation(DeviationKind.UNEXPECTED, f"E{n}", "not in the template", "")
-                for n in range(5)
+                Deviation(DeviationKind.UNEXPECTED, name, "not in the template", "")
+                for name in ("A", "B", "C", "D", "E")
             ]
             tally.add(_TEMPLATE, _location("a.json"), [*unique, _MISSING])
             findings = tally.findings()

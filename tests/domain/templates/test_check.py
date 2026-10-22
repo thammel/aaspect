@@ -20,6 +20,9 @@ def _property(id_short: str, semantic_id: str | None, **kwargs: object) -> Eleme
 class TestMatching(unittest.TestCase):
     def test_key_drops_whitespace_and_irdi_version(self) -> None:
         self.assertEqual(matching_key(" 0173-1#02-AAO677#002 "), "0173-1#02-AAO677")
+        composite = "0173-1#02-ABI500#001/0173-1#01-AHF579#001"
+        self.assertEqual(matching_key(composite + "*01"), "0173-1#02-ABI500/0173-1#01-AHF579")
+        self.assertEqual(matching_key(composite), "0173-1#02-ABI500/0173-1#01-AHF579")
         self.assertEqual(matching_key("https://x/1/0"), "https://x/1/0")
         self.assertIsNone(matching_key("   "))
 
@@ -136,6 +139,79 @@ class TestDeviations(unittest.TestCase):
         template = (_property("Marking{00}", "urn:marking", cardinality=Cardinality(1, None)),)
         submodel = (_property("Marking01", "urn:marking"), _property("Marking02", "urn:marking"))
         self.assertEqual(deviations(template, submodel), [])
+
+
+class TestAlternatives(unittest.TestCase):
+    def test_list_items_follow_the_item_template_of_their_kind(self) -> None:
+        shapes = (
+            Element(None, "urn:range", "Range", "xs:int"),
+            Element(None, "urn:property", "Property", "xs:string"),
+        )
+        template = (Element("L", "urn:l", "SubmodelElementList", children=shapes),)
+        items = (
+            Element(None, "urn:property", "Property", "xs:string"),
+            Element(None, "urn:range", "Range", "xs:int"),
+            Element(None, "urn:other", "Property", "xs:string"),
+        )
+        found = deviations(
+            template, (Element("L", "urn:l", "SubmodelElementList", children=items),)
+        )
+        self.assertEqual(
+            found, [Deviation(DeviationKind.UNEXPECTED, "L[2]", "not in the template", "Property")]
+        )
+
+    def test_alternatives_sharing_a_semantic_id_take_freely_named_instances(self) -> None:
+        template = (
+            Element(
+                "InterfaceHTTP", "urn:interface", "SubmodelElementCollection", cardinality=MANY
+            ),
+            Element(
+                "InterfaceMQTT", "urn:interface", "SubmodelElementCollection", cardinality=MANY
+            ),
+        )
+        submodel = (Element("MyPump", "urn:interface", "SubmodelElementCollection"),)
+        kinds = [deviation.kind for deviation in deviations(template, submodel)]
+        self.assertEqual(kinds, [DeviationKind.ID_SHORT])
+
+    def test_exact_id_short_before_numbering(self) -> None:
+        template = (
+            _property("Nozzle_1", None, cardinality=ONE),
+            _property("Nozzle_12", None, cardinality=ONE),
+        )
+        submodel = (_property("Nozzle_12", "urn:a"), _property("Nozzle_1", "urn:b"))
+        self.assertEqual(deviations(template, submodel), [])
+
+    def test_wildcards_take_the_remaining_elements_of_their_type(self) -> None:
+        template = (
+            _property("Name", "urn:name", cardinality=ONE),
+            Element(
+                "arbitrary",
+                "NON_EMPTY_VALUE",
+                "Property",
+                cardinality=Cardinality(1, None),
+                wildcard=True,
+            ),
+        )
+        submodel = (
+            _property("Name", "urn:name"),
+            _property("Voltage", "urn:voltage"),
+            Element("Group", "urn:group", "SubmodelElementCollection"),
+        )
+        self.assertEqual(
+            deviations(template, submodel),
+            [
+                Deviation(
+                    DeviationKind.UNEXPECTED,
+                    "Group",
+                    "not in the template",
+                    "SubmodelElementCollection",
+                )
+            ],
+        )
+        self.assertEqual(
+            deviations(template, (_property("Name", "urn:name"),)),
+            [Deviation(DeviationKind.MISSING, "arbitrary", "1..*", "absent")],
+        )
 
 
 if __name__ == "__main__":

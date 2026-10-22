@@ -12,6 +12,7 @@ _CARDINALITIES = {
     "OneToMany": Cardinality(1, None),
     "ZeroToMany": Cardinality(0, None),
 }
+_WILDCARD_IDS = frozenset({"non_empty_value", "semanticidnotavailable"})
 # Elements whose children are compared: a collection's and a list's value, an entity's
 # statements.
 _CHILDREN = {
@@ -53,14 +54,28 @@ def _elements(raw: object, depth: int) -> tuple[Element, ...]:
 def _element(raw: dict[str, Any], depth: int) -> Element:
     model_type = text_of(raw, "modelType")
     children_key = _CHILDREN.get(model_type or "")
+    id_short = text_of(raw, "idShort")
+    semantic_id = first_key(raw)
     return Element(
-        id_short=text_of(raw, "idShort"),
-        semantic_id=first_key(raw),
+        id_short=id_short,
+        semantic_id=semantic_id,
+        wildcard=_is_wildcard(id_short, semantic_id),
         model_type=model_type,
         value_type=text_of(raw, "valueType"),
         children=_elements(raw.get(children_key), depth + 1) if children_key else (),
         cardinality=_cardinality(raw.get("qualifiers")),
     )
+
+
+def _is_wildcard(id_short: str | None, semantic_id: str | None) -> bool:
+    """IDTA marks an element that stands for any further ones by its name, or by a
+    semanticId no real element carries."""
+    if id_short is not None and "arbitrary" in id_short.lower():
+        return True
+    if semantic_id is None:
+        return False
+    marker = semantic_id.strip().lower()
+    return marker in _WILDCARD_IDS or "example.com/" in marker
 
 
 def _cardinality(qualifiers: object) -> Cardinality | None:

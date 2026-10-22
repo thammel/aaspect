@@ -1,11 +1,11 @@
 """Compare a submodel with its template: which elements are missing, too many, mistyped."""
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
 from aaspect.domain.blocks import Severity
 from aaspect.domain.templates.elements import Element, id_short_matches
+from aaspect.domain.templates.matching import assign
 
 
 class DeviationKind(StrEnum):
@@ -54,51 +54,17 @@ def deviations(template: tuple[Element, ...], submodel: tuple[Element, ...]) -> 
 def _compare_level(
     expected: tuple[Element, ...], actual: tuple[Element, ...], path: str, found: list[Deviation]
 ) -> None:
-    shared = _shared_keys(expected)
-    by_key: dict[str, list[int]] = {}
-    for index, candidate in enumerate(actual):
-        if candidate.key is not None:
-            by_key.setdefault(candidate.key, []).append(index)
     claimed: set[int] = set()
-    for element in expected:
-        matches = _matches(element, actual, by_key, element.key in shared, claimed)
-        claimed.update(matches)
+    for element, indexes in zip(expected, assign(expected, actual), strict=True):
+        claimed.update(indexes)
         here = _join(path, element.id_short)
-        _check_count(element, len(matches), here, found)
-        for index in matches:
-            _compare_element(element, actual[index], here, found)
+        _check_count(element, len(indexes), here, found)
+        if not element.wildcard:
+            for index in indexes:
+                _compare_element(element, actual[index], here, found)
     for index, candidate in enumerate(actual):
         if index not in claimed:
-            found.append(
-                Deviation(
-                    DeviationKind.UNEXPECTED,
-                    _join(path, candidate.id_short),
-                    "not in the template",
-                    candidate.model_type or "",
-                )
-            )
-
-
-def _matches(
-    element: Element,
-    actual: tuple[Element, ...],
-    by_key: dict[str, list[int]],
-    shared_key: bool,
-    claimed: set[int],
-) -> list[int]:
-    """Indexes of the unclaimed elements matching `element`: by semanticId, and also by
-    idShort where siblings share it; by idShort alone where it has none."""
-    if element.key is None:
-        pool: Iterable[int] = range(len(actual))
-    else:
-        pool = by_key.get(element.key, ())
-        if not shared_key:
-            return [index for index in pool if index not in claimed]
-    return [
-        index
-        for index in pool
-        if index not in claimed and id_short_matches(element.id_short, actual[index].id_short)
-    ]
+            found.append(_unexpected(_join(path, candidate.id_short), candidate))
 
 
 def _check_count(element: Element, count: int, path: str, found: list[Deviation]) -> None:
@@ -138,7 +104,11 @@ def _compare_element(
         if element.children:
             for position, item in enumerate(candidate.children):
                 item_path = f"{path}[{position}]"
-                _compare_element(element.children[0], item, item_path, found, in_list=True)
+                shape = _item_template(element.children, item)
+                if shape is None:
+                    found.append(_unexpected(item_path, item))
+                else:
+                    _compare_element(shape, item, item_path, found, in_list=True)
     elif element.children:
         _compare_level(element.children, candidate.children, path, found)
 
@@ -167,13 +137,32 @@ def _compare_names(
         )
 
 
-def _shared_keys(elements: tuple[Element, ...]) -> set[str]:
-    seen: set[str] = set()
-    shared: set[str] = set()
-    for element in elements:
-        if element.key is not None:
-            (shared if element.key in seen else seen).add(element.key)
-    return shared
+def _item_template(shapes: tuple[Element, ...], item: Element) -> Element | None:
+    """The template item a list item follows: one with its semanticId, where the template
+    names any; then one of its element type; among several, the one it deviates least
+    from. None for an item of a kind the template does not define."""
+    candidates = shapes
+    if item.key is not None and any(shape.key is not None for shape in shapes):
+        candidates = tuple(shape for shape in shapes if shape.key == item.key)
+        if not candidates:
+            return None
+    typed = tuple(shape for shape in candidates if shape.model_type == item.model_type)
+    candidates = typed or candidates
+    if len(candidates) == 1:
+        return candidates[0]
+    return min(candidates, key=lambda shape: _errors_against(shape, item))
+
+
+def _errors_against(shape: Element, item: Element) -> int:
+    trial: list[Deviation] = []
+    _compare_element(shape, item, "", trial, in_list=True)
+    return sum(1 for deviation in trial if SEVERITY[deviation.kind] is Severity.ERROR)
+
+
+def _unexpected(path: str, candidate: Element) -> Deviation:
+    return Deviation(
+        DeviationKind.UNEXPECTED, path, "not in the template", candidate.model_type or ""
+    )
 
 
 def _join(path: str, id_short: str | None) -> str:

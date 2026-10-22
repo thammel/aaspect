@@ -19,6 +19,7 @@ _MAX_LOCATIONS = 1_000
 _MAX_FINDINGS = 500
 _MAX_GROUPS = 20_000
 _LIST_POSITION = re.compile(r"\[\d+\]")
+_NUMBER = re.compile(r"\d+")
 
 _DESCRIPTIONS = {
     DeviationKind.MISSING: "mandatory element missing",
@@ -99,13 +100,7 @@ class ConformanceTally:
         return tuple(findings)
 
     def _group(self, template: Template, location: Location, deviation: Deviation) -> None:
-        key = (
-            deviation.kind,
-            template.name,
-            _LIST_POSITION.sub("[]", deviation.path),
-            deviation.expected,
-            deviation.actual,
-        )
+        key = _key(template, deviation)
         group = self._groups.get(key)
         if group is None:
             if len(self._groups) >= _MAX_GROUPS:
@@ -119,6 +114,20 @@ class ConformanceTally:
         if len(group.locations) < _MAX_LOCATIONS:
             place = dataclasses.replace(location, element_path=short(deviation.path))
             group.locations.append(place)
+
+
+def _key(template: Template, deviation: Deviation) -> _Key:
+    """List positions are left out of the path; numbered siblings the template does not
+    define (Document01 to Document22) are one kind, and so are differing counts."""
+    path = _LIST_POSITION.sub("[]", deviation.path)
+    actual = deviation.actual
+    if deviation.kind is DeviationKind.UNEXPECTED:
+        parent, _, name = path.rpartition(".")
+        numbered = _NUMBER.sub("{n}", name)
+        path = f"{parent}.{numbered}" if parent else numbered
+    elif deviation.kind is DeviationKind.CARDINALITY:
+        actual = "another number"
+    return (deviation.kind, template.name, path, deviation.expected, actual)
 
 
 def short(value: str) -> str:

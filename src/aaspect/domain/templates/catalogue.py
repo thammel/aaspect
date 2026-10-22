@@ -22,12 +22,14 @@ class Tier(StrEnum):
 @dataclass(frozen=True, slots=True)
 class TemplateFile:
     """One file of templates: `name` as shown in the report, `environment` its AAS JSON.
-    Of two templates with one id in one tier, the higher `version` is used."""
+    Of two templates with one id in one tier, the lower `priority` is used, then the
+    higher `version`: a profile of another template (priority 1) gives way to it."""
 
     name: str
     tier: Tier
     environment: dict[str, Any] = field(repr=False)
     version: tuple[int, ...] = ()
+    priority: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +62,10 @@ class Catalogue:
         self.duplicates = 0
         self.files = 0
         tiers = list(Tier)
-        ordered = sorted(files, key=lambda f: (tiers.index(f.tier), _descending(f.version), f.name))
+        ordered = sorted(
+            files,
+            key=lambda f: (tiers.index(f.tier), f.priority, _descending(f.version), f.name),
+        )
         for template_file in ordered:
             self.files += 1
             self._add_file(template_file)

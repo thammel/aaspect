@@ -7,9 +7,11 @@ from dataclasses import dataclass, field
 # deeper instance elements are never compared.
 MAX_DEPTH = 64
 
-# The trailing version of an IRDI, the "#003" of 0173-1#02-AAO677#003. Instances often
-# use another version than their template, which is no reason to miss the element.
-_IRDI_VERSION = re.compile(r"#\d+$")
+# The version of an IRDI, the "#003" of 0173-1#02-AAO677#003, in each part of a composite
+# one (0173-1#02-ABI500#001/0173-1#01-AHF579#001), and an ECLASS cardinality suffix such
+# as "*01". Instances often use another version than their template, which is no reason
+# to miss the element.
+_IRDI_VERSION = re.compile(r"#\d+(?=$|/|\*)|\*\d+$")
 # IDTA templates number repeated elements with a placeholder: Document{00}, Marking{00},
 # and in older editions Document__00__.
 _PLACEHOLDER = re.compile(r"\{[^{}]*\}|__\d+__")
@@ -33,6 +35,9 @@ class Element:
     value_type: str | None = None
     children: tuple["Element", ...] = ()
     cardinality: Cardinality | None = None
+    # A template element standing for any further elements, such as Technical Data's
+    # arbitrary properties.
+    wildcard: bool = False
     # Elements are compared by it many times over.
     key: str | None = field(init=False, repr=False, compare=False)
 
@@ -42,7 +47,7 @@ class Element:
 
 def matching_key(semantic_id: str | None) -> str | None:
     """The semanticId as elements are matched by: without surrounding whitespace, which
-    JSON files carry and XML files lose on import, and without an IRDI version."""
+    JSON files carry and XML files lose on import, and without IRDI versions."""
     if semantic_id is None:
         return None
     return _IRDI_VERSION.sub("", semantic_id.strip()) or None

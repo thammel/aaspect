@@ -72,6 +72,43 @@ class TestCatalogue(unittest.TestCase):
         assert found_old is not None and found_other is not None
         self.assertEqual((found_old.name, found_other.name), ("1.2", "2.0"))
 
+    def test_a_profile_gives_way_to_the_template_it_reuses_the_id_of(self) -> None:
+        catalogue = Catalogue(
+            [
+                TemplateFile(
+                    "battery part 3",
+                    Tier.CURRENT,
+                    {"submodels": [_submodel("urn:pcf")]},
+                    (1, 1),
+                    priority=1,
+                ),
+                TemplateFile(
+                    "carbon footprint",
+                    Tier.CURRENT,
+                    {"submodels": [_submodel("urn:pcf")]},
+                    (1, 0, 2),
+                ),
+            ]
+        )
+        found = catalogue.lookup("urn:pcf")
+        assert found is not None
+        self.assertEqual(found.name, "carbon footprint")
+
+    def test_wildcards_are_marked(self) -> None:
+        [arbitrary, named] = template_elements(
+            {
+                "submodelElements": [
+                    {"idShort": "ID___arbitrary1__", "modelType": "Property"},
+                    {
+                        "idShort": "Name",
+                        "modelType": "Property",
+                        "semanticId": {"keys": [{"value": "urn:name"}]},
+                    },
+                ]
+            }
+        )
+        self.assertEqual((arbitrary.wildcard, named.wildcard), (True, False))
+
     def test_template_without_semantic_id_is_found_by_its_id(self) -> None:
         catalogue = Catalogue([_file("bom", Tier.CURRENT, _submodel(None))])
         self.assertIsNotNone(catalogue.lookup("urn:template"))
