@@ -72,6 +72,24 @@ class TestIdtaTemplates(unittest.TestCase):
         with self.assertRaises(ShownError):
             source.catalogue()
 
+    def test_a_retry_fetches_only_what_is_missing(self) -> None:
+        manifest = _manifest()
+        second = dict(manifest["files"][0], path="published/Other/1/0/IDTA 2-0_Template.json")
+        manifest["files"].append(second)
+        asked: list[str] = []
+
+        def download(pinned: PinnedFile) -> bytes:
+            asked.append(pinned.path)
+            if pinned.path == second["path"] and asked.count(second["path"]) == 1:
+                raise OSError("offline")
+            return _CONTENT
+
+        source = IdtaTemplates(download, manifest, workers=1)
+        with self.assertLogs("aaspect.adapters.templates.idta", "WARNING"):
+            self.assertFalse(source.load())
+        self.assertTrue(source.load())
+        self.assertEqual(asked, [_PATH, second["path"], second["path"]])
+
     def test_start_retries_in_the_background(self) -> None:
         answers = iter([OSError("offline"), _CONTENT])
 

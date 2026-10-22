@@ -121,8 +121,9 @@ live in an unnamed volume that each `docker compose down` leaves behind; use
 The container runs as an unprivileged user on a read-only file system and is reachable
 from this machine only. `compose.yaml` sets `AASPECT_VALIDATION_WORKERS` to 4 so that
 all workers at their memory limit fit the container's 10 GB; other settings are passed
-the same way, under `environment:`. The container needs outbound HTTPS for the schema
-download, or `AASPECT_DOWNLOAD_URL` pointing at a mirror.
+the same way, under `environment:`. The container needs outbound HTTPS for the schemas
+(about 330 KB, at startup) and the IDTA submodel templates (about 36 MB, in the
+background), or `AASPECT_DOWNLOAD_URL` pointing at a mirror.
 
 ## Configuration
 
@@ -217,7 +218,8 @@ src/aaspect/
 │                  version selection, grouping of violations, identifier classification
 │                  and analytics tables, template matching and conformance rules. Pure
 │                  Python, no I/O. metamodel.py holds everything that differs between
-│                  metamodel versions: names, XML namespaces, pinned schemas.
+│                  metamodel versions: names, XML namespaces, pinned schemas, the
+│                  constraint checker's rule set.
 ├── ports/         Interfaces the use-cases depend on: read uploads, validate a
 │                  document, write a report, parse and import into a graph, count
 │                  in it, download a pinned file.

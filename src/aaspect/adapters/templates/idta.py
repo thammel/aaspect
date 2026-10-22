@@ -47,6 +47,7 @@ class IdtaTemplates:
         self._workers = workers
         self._lock = threading.Lock()
         self._catalogue: Catalogue | None = None
+        self._loaded: dict[str, TemplateFile] = {}
 
     def start(self) -> None:
         threading.Thread(target=self._keep_trying, daemon=True).start()
@@ -59,9 +60,13 @@ class IdtaTemplates:
 
     def load(self) -> bool:
         """Download every file of the manifest once; False, logged, if one fails."""
+        missing = [entry for entry in self._entries() if entry["path"] not in self._loaded]
         pool = ThreadPoolExecutor(self._workers)
         try:
-            files = list(pool.map(self._file, self._entries()))
+            # Files already verified are kept, so a retry fetches only the rest.
+            for entry, template_file in zip(missing, pool.map(self._file, missing), strict=True):
+                self._loaded[entry["path"]] = template_file
+            files = list(self._loaded.values())
             catalogue = Catalogue(files)
         except Exception:  # Any failure leaves the templates unavailable until a retry.
             logger.warning("Downloading the IDTA submodel templates failed", exc_info=True)
