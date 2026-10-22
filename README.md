@@ -37,10 +37,9 @@ is over distinct contents: an object repeated identically in many files counts o
   ConceptDescriptions; nesting depth of SubmodelElements and submodel references per
   shell (count, min, max, mean, median, standard deviation).
 - **Submodels:** which submodels are used, and how often, grouped by semanticId and named
-  by their most frequent idShort. Split by the origin of the semanticId: IDTA
-  (`admin-shell.io`), ECLASS, IEC CDD or proprietary. This is read from the identifier,
-  not from the IDTA template catalogue: a template identified by an ECLASS IRDI counts as
-  ECLASS, and current and withdrawn templates are not told apart.
+  by their most frequent idShort. Split by origin: the IDTA template their semanticId
+  names (current, superseded or withdrawn edition, see template conformance), else the
+  dictionary of the identifier (IDTA `admin-shell.io`, ECLASS, IEC CDD or proprietary).
 - **Semantic IDs:** semanticIds and supplementalSemanticIds of SubmodelElements, their
   identification schemes (IRDI, IRI, URN, UUID, other) and the dictionaries they point
   to (ECLASS, IEC CDD, IDTA, other).
@@ -59,12 +58,22 @@ is over distinct contents: an object repeated identically in many files counts o
 Rankings list the 100 most frequent values and sum up the rest. Values are compared on
 their first 256 characters.
 
-### Submodel template conformance *(planned)*
+### Submodel template conformance *(available: IDTA templates; planned: uploaded templates)*
 
-- Match each submodel to its IDTA submodel template by its semanticId.
+- Match each submodel to its IDTA submodel template by its semanticId, ignoring the
+  version of an IRDI. A current edition is preferred over a superseded one, and a
+  superseded one over a withdrawn one; the report names which was used.
 - Report missing mandatory elements, cardinality violations, wrong element or value
-  types and elements that the template does not define.
-- Custom templates can be uploaded in addition to the IDTA templates.
+  types (errors), and elements the template does not define, other idShorts and other
+  semanticId versions (notes). Elements are matched by semanticId, else by idShort;
+  numbered idShorts such as `Document{00}` match `Document01`. Collections, lists and
+  entities are compared level by level.
+- The templates are downloaded at runtime from one pinned commit of IDTA's
+  [submodel-templates](https://github.com/admin-shell-io/submodel-templates) repository
+  (CC BY 4.0) and checked against the hashes in
+  `src/aaspect/adapters/templates/manifest.json`; AASpect ships none of them.
+  `tools/template_manifest.py <commit>` moves to newer templates.
+- Custom templates can be uploaded in addition to the IDTA templates. *(planned)*
 
 ### Deployment
 
@@ -171,6 +180,12 @@ exceeds its limits; the file then gets a "not validated" finding.
 | `AASPECT_WORKER_MEMORY_BYTES` | `2147483648` (2 GB) | Memory of one worker process. |
 | `AASPECT_MAX_VIOLATIONS_PER_DOCUMENT` | `1000` | Violations listed per document and version; a note says when there were more. |
 
+### Submodel templates
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AASPECT_TEMPLATES_URL` | `https://raw.githubusercontent.com` | Where the IDTA submodel templates are downloaded from at startup: GitHub's raw file server, or a mirror with the same paths. Each file is checked against its hash, so a mirror cannot change them. Empty turns template conformance off. A failed download is tried again five minutes later at the earliest. |
+
 ### Graph database
 
 The metamodel constraint check imports each corpus into a database of its own on a
@@ -202,21 +217,24 @@ only on those two. `main.py` alone wires the adapters to the use-cases.
 src/aaspect/
 ├── domain/        Analysis rules and result types: report sections, findings, tables,
 │                  version selection, grouping of violations, identifier classification
-│                  and analytics tables. Pure Python, no I/O. metamodel.py holds
-│                  everything that differs between metamodel versions: names, XML
-│                  namespaces, pinned schemas.
+│                  and analytics tables, template matching and conformance rules. Pure
+│                  Python, no I/O. metamodel.py holds everything that differs between
+│                  metamodel versions: names, XML namespaces, pinned schemas.
 ├── ports/         Interfaces the use-cases depend on: read uploads, validate a
 │                  document, write a report, parse and import into a graph, count
 │                  in it, download a pinned file.
 ├── app/           Use-cases: analyze a corpus, run the schema check, import a corpus
-│                  into a graph database, check its constraints, describe it.
+│                  into a graph database, check its constraints and templates,
+│                  describe it.
 ├── adapters/      Implementations of the ports, one package per outside concern:
 │   ├── files/         read JSON, XML and AASX uploads in memory, within limits
 │   ├── download/      download pinned files over HTTPS
 │   ├── schema/        validate with jsonschema-rs and lxml in isolated worker
 │   │                  processes
 │   ├── neo4aas/       convert documents, import them with neo4aas, one database
-│   │                  per analysis on DozerDB; analytics/ holds the counting queries
+│   │                  per analysis on DozerDB; analytics/ holds the counting queries,
+│   │                  submodels/ reads element trees for template conformance
+│   ├── templates/     download the IDTA submodel templates listed in manifest.json
 │   ├── report_json/   JSON report download
 │   └── web/           FastAPI + Jinja2 UI, templates/ and static/
 ├── config/        Settings from AASPECT_* environment variables
@@ -225,6 +243,7 @@ tests/             Mirrors src/aaspect/; tests/test_main.py drives the whole app
                    Pinned third-party files are downloaded once into .cache/
 Dockerfile         Image with the installed package only, run as an unprivileged user
 compose.yaml       Local deployment with resource limits
+tools/             Development tools, e.g. writing the template manifest
 ```
 
 ---

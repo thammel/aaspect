@@ -8,6 +8,8 @@ from aaspect.domain.constraints.violations import ConstraintResult
 from aaspect.domain.corpus import AasDocument
 from aaspect.domain.id_collisions import Environment, Occurrence, Rename
 from aaspect.domain.metamodel import MetamodelVersion
+from aaspect.domain.templates.elements import Element
+from aaspect.domain.templates.instances import InstanceSubmodel, SubmodelRef
 
 
 class FakeParser:
@@ -54,9 +56,28 @@ class FixedStatistics:
         return (AttributeUse("Submodel", 1, (("semanticId", 1),)),)
 
 
-class RecordingGraph(FixedStatistics):
+class FixedSubmodels:
+    """Submodels with their element trees, keyed by graph node."""
+
+    def __init__(
+        self, refs: Sequence[SubmodelRef] = (), trees: Mapping[str, tuple[Element, ...]] = {}
+    ) -> None:
+        self.refs = tuple(refs)
+        self.trees = dict(trees)
+        self.fetched: list[list[str]] = []
+
+    def submodel_refs(self) -> Sequence[SubmodelRef]:
+        return self.refs
+
+    def submodel_trees(self, nodes: Sequence[str]) -> Sequence[InstanceSubmodel]:
+        self.fetched.append(list(nodes))
+        return [InstanceSubmodel(node, self.trees.get(node, ())) for node in nodes]
+
+
+class RecordingGraph(FixedStatistics, FixedSubmodels):
     def __init__(self, constraints: ConstraintResult | Exception = NO_VIOLATIONS) -> None:
-        super().__init__()
+        FixedStatistics.__init__(self)
+        FixedSubmodels.__init__(self)
         self.calls: list[tuple[str, object]] = []
         self.batches: list[int] = []
         self.constraints = constraints

@@ -28,6 +28,7 @@ from aaspect.adapters.schema.validator import (
     OfficialSchemaValidator,
     download_schemas,
 )
+from aaspect.adapters.templates.idta import IdtaTemplates
 from aaspect.adapters.web.access_log import MaskReportKeys
 from aaspect.adapters.web.app import create_app
 from aaspect.adapters.web.routes import WebLimits
@@ -73,6 +74,7 @@ def build_app(
         time_limit_seconds=settings.analysis_time_limit_seconds,
         graph_store=_graph_store(settings, resources),
         parser=Neo4aasEnvironmentParser(),
+        templates=_templates(settings),
     )
     limits = WebLimits(
         max_upload_bytes=settings.max_upload_bytes,
@@ -116,6 +118,14 @@ def _graph_store(settings: Settings, resources: ExitStack) -> DozerDbStore | Non
     resources.callback(store.close)
     store.drop_leftovers()
     return store
+
+
+def _templates(settings: Settings) -> IdtaTemplates | None:
+    if not settings.templates_url:
+        return None
+    templates = IdtaTemplates(settings.templates_url)
+    templates.prefetch()
+    return templates
 
 
 def main() -> None:

@@ -66,9 +66,18 @@ def _assets(statistics: CorpusStatistics) -> tuple[Block, ...]:
     )
 
 
-_STEPS: tuple[tuple[str, Step], ...] = (
-    ("corpus size", _overview),
-    ("submodels", lambda statistics: submodel_tables(statistics.submodel_kinds())),
+def _steps(template_of: Callable[[str], str | None]) -> tuple[tuple[str, Step], ...]:
+    return (
+        ("corpus size", _overview),
+        (
+            "submodels",
+            lambda statistics: submodel_tables(statistics.submodel_kinds(), template_of),
+        ),
+        *_FIXED_STEPS,
+    )
+
+
+_FIXED_STEPS: tuple[tuple[str, Step], ...] = (
     ("semantic IDs", _identifiers),
     ("element types", lambda statistics: (element_type_table(statistics.element_types()),)),
     ("value types", _tallies(Measure.VALUE_TYPES)),
@@ -87,8 +96,10 @@ def analyze(
     statistics: CorpusStatistics,
     imported: ImportResult,
     expired: Callable[[], bool] = lambda: False,
+    template_of: Callable[[str], str | None] = lambda _: None,
 ) -> Section:
-    """Every step whose turn comes before `expired` turns true; the others are named."""
+    """Every step whose turn comes before `expired` turns true; the others are named.
+    `template_of` names the template a submodel semanticId stands for, if one is known."""
     if expired() or not imported.finished:
         return Section(
             SECTION_KEY,
@@ -100,7 +111,7 @@ def analyze(
     missed: list[str] = []
     failed: list[str] = []
     first_error: Exception | None = None
-    for name, step in _STEPS:
+    for name, step in _steps(template_of):
         if expired():
             missed.append(name)
             continue

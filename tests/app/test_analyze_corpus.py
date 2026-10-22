@@ -143,7 +143,7 @@ class TestAnalyzeCorpus(unittest.TestCase):
         )
         report = analyze.run(UPLOADS, AUTO)
         self.assertEqual(
-            [s.status for s in report.sections[1:]],
+            [s.status for s in report.sections[1:4]],
             [SectionStatus.COMPLETED] * 3,
         )
 
@@ -158,7 +158,7 @@ class TestAnalyzeCorpus(unittest.TestCase):
         )
         report = analyze.run(UPLOADS, AUTO)
         self.assertEqual(
-            [s.status for s in report.sections[1:]],
+            [s.status for s in report.sections[1:4]],
             [SectionStatus.COMPLETED, SectionStatus.FAILED, SectionStatus.COMPLETED],
         )
         self.assertEqual(
@@ -183,7 +183,7 @@ class TestAnalyzeCorpus(unittest.TestCase):
         )
         report = analyze.run(UPLOADS, AUTO)
         self.assertEqual(
-            [s.status for s in report.sections[1:]],
+            [s.status for s in report.sections[1:4]],
             [SectionStatus.COMPLETED, SectionStatus.COMPLETED, SectionStatus.FAILED],
         )
 
@@ -204,14 +204,14 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertEqual(
             states,
             [
-                ("waiting", "waiting", "waiting", "waiting"),
-                ("running", "waiting", "waiting", "waiting"),
-                ("completed", "running", "waiting", "waiting"),
-                ("completed", "completed", "waiting", "waiting"),
-                ("completed", "completed", "waiting", "running"),
-                ("completed", "completed", "waiting", "completed"),
-                ("completed", "completed", "running", "completed"),
-                ("completed", "completed", "completed", "completed"),
+                ("waiting", "waiting", "waiting", "waiting", "skipped"),
+                ("running", "waiting", "waiting", "waiting", "skipped"),
+                ("completed", "running", "waiting", "waiting", "skipped"),
+                ("completed", "completed", "waiting", "waiting", "skipped"),
+                ("completed", "completed", "waiting", "running", "skipped"),
+                ("completed", "completed", "waiting", "completed", "skipped"),
+                ("completed", "completed", "running", "completed", "skipped"),
+                ("completed", "completed", "completed", "completed", "skipped"),
             ],
         )
         self.assertTrue(report.finished)

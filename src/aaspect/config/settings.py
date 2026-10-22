@@ -34,6 +34,9 @@ class Settings:
     # Where third-party files such as the official schemas are downloaded from at startup:
     # GitHub's raw file server, or a mirror with the same paths.
     download_url: str = "https://raw.githubusercontent.com"
+    # Where the IDTA submodel templates are downloaded from: GitHub's raw file server, or
+    # a mirror with the same layout. Empty turns template conformance off.
+    templates_url: str = "https://raw.githubusercontent.com"
     neo4j_uri: str = "bolt://127.0.0.1:7687"
     neo4j_user: str = "neo4j"
     # Kept out of repr so that logging or printing the settings cannot leak it.
