@@ -46,29 +46,16 @@ def build_app(
     settings: Settings,
     resources: ExitStack,
     schemas: Mapping[MetamodelVersion, OfficialSchemas],
+    download: Download,
 ) -> FastAPI:
-    """The web app; worker processes and threads are released when `resources` closes."""
-    validator = IsolatedSchemaValidator(
-        partial(OfficialSchemaValidator, schemas, settings.max_violations_per_document),
-        workers=settings.validation_workers,
-        timeout_seconds=settings.validation_timeout_seconds,
-        memory_bytes=settings.worker_memory_bytes,
-    )
-    resources.callback(validator.close)
+    """The web app; worker processes and threads are released when `resources` closes.
+    `download` fetches the submodel templates in the background."""
+    validator = _validator(settings, resources, schemas)
     # One thread per worker process: the threads only wait for their worker.
     pool = resources.enter_context(ThreadPoolExecutor(settings.validation_workers))
-    reader = FileCorpusReader(
-        ArchiveLimits(
-            max_part_bytes=settings.max_part_bytes,
-            max_entries=settings.max_archive_entries,
-            max_compression_ratio=settings.max_compression_ratio,
-            max_parts=settings.max_aas_parts,
-        ),
-        max_document_bytes=settings.max_document_bytes,
-    )
     graph_store = _graph_store(settings, resources)
     analyze = AnalyzeCorpus(
-        reader,
+        _reader(settings),
         validator,
         version("aaspect"),
         pool.map,
@@ -76,7 +63,7 @@ def build_app(
         graph_store=graph_store,
         parser=Neo4aasEnvironmentParser(),
         # Templates are checked in the graph; without one, nothing is downloaded.
-        templates=_templates(settings) if graph_store else None,
+        templates=_templates(download) if graph_store else None,
     )
     limits = WebLimits(
         max_upload_bytes=settings.max_upload_bytes,
@@ -86,6 +73,33 @@ def build_app(
     )
     allowed_hosts = [host.strip() for host in settings.allowed_hosts.split(",") if host.strip()]
     return create_app(analyze.run, JsonReportWriter(), limits, allowed_hosts)
+
+
+def _validator(
+    settings: Settings,
+    resources: ExitStack,
+    schemas: Mapping[MetamodelVersion, OfficialSchemas],
+) -> IsolatedSchemaValidator:
+    validator = IsolatedSchemaValidator(
+        partial(OfficialSchemaValidator, schemas, settings.max_violations_per_document),
+        workers=settings.validation_workers,
+        timeout_seconds=settings.validation_timeout_seconds,
+        memory_bytes=settings.worker_memory_bytes,
+    )
+    resources.callback(validator.close)
+    return validator
+
+
+def _reader(settings: Settings) -> FileCorpusReader:
+    return FileCorpusReader(
+        ArchiveLimits(
+            max_part_bytes=settings.max_part_bytes,
+            max_entries=settings.max_archive_entries,
+            max_compression_ratio=settings.max_compression_ratio,
+            max_parts=settings.max_aas_parts,
+        ),
+        max_document_bytes=settings.max_document_bytes,
+    )
 
 
 def wait_for_schemas(
@@ -122,10 +136,8 @@ def _graph_store(settings: Settings, resources: ExitStack) -> DozerDbStore | Non
     return store
 
 
-def _templates(settings: Settings) -> IdtaTemplates | None:
-    if not settings.templates_url:
-        return None
-    templates = IdtaTemplates(settings.templates_url)
+def _templates(download: Download) -> IdtaTemplates:
+    templates = IdtaTemplates(download)
     templates.start()
     return templates
 
@@ -135,11 +147,16 @@ def main() -> None:
     # Uvicorn handles stop signals only once it runs; while the schemas are awaited, a
     # container stop would otherwise wait for its kill.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    schemas = wait_for_schemas(GithubDownload(settings.download_url))
+    download = GithubDownload(settings.download_url)
+    schemas = wait_for_schemas(download)
     logging.getLogger("uvicorn.access").addFilter(MaskReportKeys())
     logging.getLogger("neo4j.notifications").addFilter(UnusedSchemaNotifications())
     with ExitStack() as resources:
-        uvicorn.run(build_app(settings, resources, schemas), host=settings.host, port=settings.port)
+        uvicorn.run(
+            build_app(settings, resources, schemas, download),
+            host=settings.host,
+            port=settings.port,
+        )
 
 
 if __name__ == "__main__":

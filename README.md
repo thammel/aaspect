@@ -170,7 +170,7 @@ unpacks anything to disk.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AASPECT_DOWNLOAD_URL` | `https://raw.githubusercontent.com` | Where third-party files, such as the official schemas, are downloaded from: GitHub's raw file server, or a mirror serving the same paths (`<repository>/<commit>/<path>`). HTTPS only, no redirects, through the proxy in `HTTPS_PROXY` if set; each file is checked against its pinned size and SHA-256, so a mirror cannot change it. No user or password in the URL. |
+| `AASPECT_DOWNLOAD_URL` | `https://raw.githubusercontent.com` | Where third-party files, the official schemas at startup and the IDTA submodel templates in the background, are downloaded from: GitHub's raw file server, or a mirror serving the same paths (`<repository>/<commit>/<path>`). HTTPS only, no redirects, through the proxy in `HTTPS_PROXY` if set; each file is checked against its pinned size and SHA-256, so a mirror cannot change it. No user or password in the URL. A failed template download is tried again every five minutes; until it succeeds, template conformance reports that the templates are not available. |
 
 ### Schema validation
 
@@ -183,12 +183,6 @@ exceeds its limits; the file then gets a "not validated" finding.
 | `AASPECT_VALIDATION_TIMEOUT_SECONDS` | `30` | Time for one document and version. Some values (very long ones that fail a pattern) make libxml2 extremely slow. |
 | `AASPECT_WORKER_MEMORY_BYTES` | `2147483648` (2 GB) | Memory of one worker process. |
 | `AASPECT_MAX_VIOLATIONS_PER_DOCUMENT` | `1000` | Violations listed per document and version; a note says when there were more. |
-
-### Submodel templates
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `AASPECT_TEMPLATES_URL` | `https://raw.githubusercontent.com` | Where the IDTA submodel templates are downloaded from at startup: GitHub's raw file server, or a mirror with the same paths. Each file is checked against its hash, so a mirror cannot change them. Empty turns template conformance off. A failed download is tried again five minutes later at the earliest. |
 
 ### Graph database
 

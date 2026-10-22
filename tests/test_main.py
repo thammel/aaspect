@@ -30,11 +30,9 @@ class TestEndToEnd(unittest.TestCase):
             ("files", ("package.aasx", aasx({"/aasx/data.xml": sample(V3_0, "submodel.xml")}))),
             ("files", ("notes.txt", b"hello")),
         ]
-        settings = replace(
-            Settings(), validation_workers=2, allowed_hosts="testserver", templates_url=""
-        )
+        settings = replace(Settings(), validation_workers=2, allowed_hosts="testserver")
         with ExitStack() as resources:
-            client = TestClient(build_app(settings, resources, download_schemas(cached)))
+            client = TestClient(build_app(settings, resources, download_schemas(cached), cached))
             response = client.post("/analyses", files=files, data={"version": "auto"})
             self.assertEqual(response.status_code, 200)
             for _ in range(600):
