@@ -20,6 +20,7 @@ def _manifest(content: bytes = _CONTENT) -> dict:
         "files": [
             {
                 "path": "published/Name plate/1/0/IDTA 1-0_Template.json",
+                "priority": 0,
                 "size": len(content),
                 "sha256": hashlib.sha256(content).hexdigest(),
                 "tier": "current",
@@ -41,7 +42,7 @@ class TestIdtaTemplates(unittest.TestCase):
         self.assertTrue(source.load())
         template = source.catalogue().lookup("urn:nameplate")
         assert template is not None
-        self.assertEqual((template.name, template.tier), ("IDTA 1-0_Template", Tier.CURRENT))
+        self.assertEqual((template.name, template.tier), ("IDTA 1-0_Template (1.0)", Tier.CURRENT))
         self.assertEqual(
             fetched,
             [
@@ -95,7 +96,8 @@ class TestIdtaTemplates(unittest.TestCase):
         self.assertTrue(manifest["files"])
         for entry in manifest["files"]:
             self.assertEqual(
-                set(entry), {"path", "sha", "sha256", "size", "family", "version", "tier"}
+                set(entry),
+                {"path", "sha", "sha256", "size", "family", "priority", "version", "tier"},
             )
             self.assertIn(entry["tier"], ("current", "superseded", "withdrawn"))
 

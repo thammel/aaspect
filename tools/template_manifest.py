@@ -31,9 +31,15 @@ def main(commit: str) -> None:
         tree = json.load(reply)
     if tree.get("truncated"):
         raise SystemExit("the tree listing is truncated")
-    chosen = _choose([entry for entry in tree["tree"] if entry["type"] == "blob"])
-    for entry in chosen:
-        entry["sha256"] = _sha256(commit, entry)
+    chosen = []
+    for entry in _choose([entry for entry in tree["tree"] if entry["type"] == "blob"]):
+        content = _download(commit, entry)
+        submodels = json.loads(content.decode("utf-8-sig")).get("submodels")
+        if not submodels:
+            print(f"left out, no submodel: {entry['path']}")
+            continue
+        entry["sha256"] = hashlib.sha256(content).hexdigest()
+        chosen.append(entry)
     manifest = {
         "repository": REPOSITORY,
         "commit": commit,
@@ -65,28 +71,35 @@ def _choose(blobs: list[dict]) -> list[dict]:
     return sorted(files, key=lambda f: f["path"])
 
 
-def _sha256(commit: str, entry: dict) -> str:
+def _download(commit: str, entry: dict) -> bytes:
     url = _RAW.format(repository=REPOSITORY, commit=commit, path=urllib.parse.quote(entry["path"]))
     with urllib.request.urlopen(url) as reply:
         content = reply.read()
     blob = hashlib.sha1(f"blob {len(content)}\0".encode() + content, usedforsecurity=False)
     if blob.hexdigest() != entry["sha"] or len(content) != entry["size"]:
         raise SystemExit(f"{entry['path']}: download differs from the repository listing")
-    return hashlib.sha256(content).hexdigest()
+    return content
 
 
 def _entry(folder: str, blob: dict) -> dict:
+    """The edition comes from the folder (Digital nameplate/3/0/2); the file name only
+    where the folder has none, since names also carry part numbers (IDTA 02035-3 is part
+    3 of the Battery Passport, not edition 3). A family nested in another (a Battery
+    Passport part) is a profile: where it shares a semanticId with a family of its own,
+    such as Carbon Footprint, that one is preferred."""
     parts = folder.split("/")
     first_number = next((i for i, part in enumerate(parts) if part.isdigit()), len(parts))
-    folder_version = [int(part) for part in parts[first_number:] if part.isdigit()]
-    found = _FILE_VERSION.search(_name(blob))
-    file_version = [int(part) for part in found.group(1).split("-")] if found else []
+    version = [int(part) for part in parts[first_number:] if part.isdigit()]
+    if not version:
+        found = _FILE_VERSION.search(_name(blob))
+        version = [int(part) for part in found.group(1).split("-")] if found else []
     return {
         "path": blob["path"],
         "sha": blob["sha"],
         "size": blob["size"],
         "family": "/".join(parts[:first_number]),
-        "version": max(folder_version, file_version),
+        "priority": 0 if first_number <= 2 else 1,
+        "version": version,
         "tier": "withdrawn" if parts[0] == "deprecated" else "superseded",
     }
 

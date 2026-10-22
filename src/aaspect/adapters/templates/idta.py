@@ -105,12 +105,15 @@ class IdtaTemplates:
     def load(self) -> bool:
         """Download every file of the manifest once; False, logged, if one fails."""
         deadline = time.monotonic() + _TOTAL_SECONDS
+        pool = ThreadPoolExecutor(self._workers)
         try:
-            with ThreadPoolExecutor(self._workers) as pool:
-                files = list(pool.map(lambda entry: self._file(entry, deadline), self._entries()))
+            files = list(pool.map(lambda entry: self._file(entry, deadline), self._entries()))
         except Exception:  # Any failure leaves the templates unavailable until a retry.
             logger.warning("Downloading the IDTA submodel templates failed", exc_info=True)
             return False
+        finally:
+            # The first failure decides; the files not yet fetched are not waited for.
+            pool.shutdown(wait=False, cancel_futures=True)
         catalogue = Catalogue(files)
         with self._lock:
             self._catalogue = catalogue
@@ -133,5 +136,8 @@ class IdtaTemplates:
         environment = json.loads(content.decode("utf-8-sig"))
         if not isinstance(environment, dict):
             raise ValueError(f"{entry['path']}: not an AAS environment")
-        name = entry["path"].rsplit("/", 1)[1].removesuffix(".json")
-        return TemplateFile(name, _TIERS[entry["tier"]], environment, tuple(entry["version"]))
+        version = tuple(entry["version"])
+        stem = entry["path"].rsplit("/", 1)[1].removesuffix(".json")
+        # Editions of one template can have the same file name.
+        name = f"{stem} ({'.'.join(map(str, version))})" if version else stem
+        return TemplateFile(name, _TIERS[entry["tier"]], environment, version, entry["priority"])
