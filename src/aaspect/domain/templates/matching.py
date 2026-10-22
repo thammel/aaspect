@@ -13,7 +13,7 @@ def assign(expected: tuple[Element, ...], actual: tuple[Element, ...]) -> list[l
     one; a shared semanticId by element type; last, wildcards take the rest of their
     type."""
     owner: dict[int, int] = {}
-    shared = _shared_keys(expected)
+    shared = shared_keys(expected)
     by_key: dict[str, list[int]] = {}
     for index, candidate in enumerate(actual):
         if candidate.key is not None:
@@ -68,8 +68,14 @@ def _by_type(
         for index in by_key.get(key, ()):
             if index in owner:
                 continue
-            same_type = [p for p in group if expected[p].model_type == actual[index].model_type]
-            owner[index] = (same_type or group)[0]
+            kind = actual[index].model_type
+            same_type = [p for p in group if expected[p].model_type == kind]
+            if same_type:
+                owner[index] = same_type[0]
+            elif group and not any(
+                e.wildcard and e.key == key and e.model_type in (None, kind) for e in expected
+            ):
+                owner[index] = group[0]
 
 
 def _wildcards(
@@ -83,10 +89,12 @@ def _wildcards(
                 owner[index] = position
 
 
-def _shared_keys(elements: tuple[Element, ...]) -> set[str]:
+def shared_keys(elements: tuple[Element, ...]) -> set[str]:
+    """semanticIds more than one template element carries, wildcards included: Technical
+    Data's Section and its Arbitrary elements share one."""
     seen: set[str] = set()
     shared: set[str] = set()
     for element in elements:
-        if element.key is not None and not element.wildcard:
+        if element.key is not None:
             (shared if element.key in seen else seen).add(element.key)
     return shared

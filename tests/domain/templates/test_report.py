@@ -62,9 +62,12 @@ class TestFindings(unittest.TestCase):
             findings = tally.findings()
         finally:
             tally_module._MAX_GROUPS = original
-        self.assertEqual(len(findings), 3)
-        self.assertEqual(findings[-1].rule_id, "template-more")
-        self.assertIn("1 errors, 3 notes", findings[-1].message)
+        # The error took the place of the first note.
+        self.assertEqual(
+            [finding.rule_id for finding in findings],
+            ["template-missing", "template-unexpected", "template-more"],
+        )
+        self.assertIn("0 errors, 4 notes", findings[-1].message)
 
 
 if __name__ == "__main__":

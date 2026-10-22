@@ -141,7 +141,37 @@ class TestDeviations(unittest.TestCase):
         self.assertEqual(deviations(template, submodel), [])
 
 
+_ARBITRARY = "https://admin-shell.io/SMT/General/Arbitrary"
+
+
 class TestAlternatives(unittest.TestCase):
+    def test_a_concrete_element_leaves_wildcards_sharing_its_id_their_type(self) -> None:
+        template = (
+            Element("Section", _ARBITRARY, "SubmodelElementCollection", cardinality=MANY),
+            Element("ArbitraryProperty", _ARBITRARY, "Property", cardinality=MANY, wildcard=True),
+        )
+        submodel = (
+            Element("Section", _ARBITRARY, "SubmodelElementCollection"),
+            _property("MyProp", _ARBITRARY),
+        )
+        self.assertEqual(deviations(template, submodel), [])
+
+    def test_alternatives_each_mandatory_need_only_one_of_them(self) -> None:
+        template = (
+            Element(
+                "ForHTTP", "urn:i", "SubmodelElementCollection", cardinality=Cardinality(1, None)
+            ),
+            Element(
+                "ForMQTT", "urn:i", "SubmodelElementCollection", cardinality=Cardinality(1, None)
+            ),
+        )
+        one = (Element("ForHTTP", "urn:i", "SubmodelElementCollection"),)
+        self.assertEqual(deviations(template, one), [])
+        self.assertEqual(
+            deviations(template, ()),
+            [Deviation(DeviationKind.MISSING, "(ForHTTP | ForMQTT)", "1..*", "absent")],
+        )
+
     def test_list_items_follow_the_item_template_of_their_kind(self) -> None:
         shapes = (
             Element(None, "urn:range", "Range", "xs:int"),

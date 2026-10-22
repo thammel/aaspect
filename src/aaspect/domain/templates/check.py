@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from aaspect.domain.blocks import Severity
-from aaspect.domain.templates.elements import Element, id_short_matches
+from aaspect.domain.templates.elements import Cardinality, Element, id_short_matches
 from aaspect.domain.templates.matching import assign
 
 
@@ -55,16 +55,50 @@ def _compare_level(
     expected: tuple[Element, ...], actual: tuple[Element, ...], path: str, found: list[Deviation]
 ) -> None:
     claimed: set[int] = set()
+    alternatives = _alternatives(expected)
+    counts: dict[str, int] = {}
     for element, indexes in zip(expected, assign(expected, actual), strict=True):
         claimed.update(indexes)
         here = _join(path, element.id_short)
-        _check_count(element, len(indexes), here, found)
+        key = element.key
+        if key is not None and key in alternatives and not element.wildcard:
+            counts[key] = counts.get(key, 0) + len(indexes)
+        else:
+            _check_count(element, len(indexes), here, found)
         if not element.wildcard:
             for index in indexes:
                 _compare_element(element, actual[index], here, found)
+    for key, group in alternatives.items():
+        _check_count(group, counts.get(key, 0), _join(path, group.id_short), found)
     for index, candidate in enumerate(actual):
         if index not in claimed:
             found.append(_unexpected(_join(path, candidate.id_short), candidate))
+
+
+def _alternatives(expected: tuple[Element, ...]) -> dict[str, Element]:
+    """Template elements sharing a semanticId are alternatives, such as the interface
+    kinds of Asset Interfaces Description, each 1..*: together they need the smallest of
+    their minimums and allow the sum of their maximums. Keyed by semanticId, as one
+    element named after all of them."""
+    groups: dict[str, list[Element]] = {}
+    for element in expected:
+        if element.key is not None and not element.wildcard:
+            groups.setdefault(element.key, []).append(element)
+    merged = {}
+    for key, group in groups.items():
+        if len(group) < 2:
+            continue
+        bounds = [element.cardinality or Cardinality(0, None) for element in group]
+        maximums = [bound.maximum for bound in bounds]
+        maximum = None if None in maximums else sum(m for m in maximums if m is not None)
+        names = " | ".join(element.id_short or "?" for element in group)
+        merged[key] = Element(
+            f"({names})",
+            group[0].semantic_id,
+            None,
+            cardinality=Cardinality(min(bound.minimum for bound in bounds), maximum),
+        )
+    return merged
 
 
 def _check_count(element: Element, count: int, path: str, found: list[Deviation]) -> None:

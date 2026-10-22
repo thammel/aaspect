@@ -2,7 +2,7 @@
 
 import dataclasses
 import re
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
@@ -58,6 +58,8 @@ class ConformanceTally:
         self._groups: dict[_Key, _Group] = {}
         # Deviations of kinds not told apart any more, by severity.
         self._ungrouped: Counter[Severity] = Counter()
+        # Kinds of note in the order they came, the first to give way to errors.
+        self._notes: deque[_Key] = deque()
 
     def add(self, template: Template, location: Location, found: Iterable[Deviation]) -> None:
         """One checked submodel: `location` names it, each deviation adds its path."""
@@ -99,14 +101,26 @@ class ConformanceTally:
             )
         return tuple(findings)
 
+    def _make_room(self, deviation: Deviation) -> bool:
+        """An error past the bound takes the place of a kind of note, which is then only
+        counted; True if it found one."""
+        if SEVERITY[deviation.kind] is not Severity.ERROR:
+            return False
+        if not self._notes:
+            return False
+        self._ungrouped[Severity.INFO] += self._groups.pop(self._notes.popleft()).places
+        return True
+
     def _group(self, template: Template, location: Location, deviation: Deviation) -> None:
         key = _key(template, deviation)
         group = self._groups.get(key)
         if group is None:
-            if len(self._groups) >= _MAX_GROUPS:
+            if len(self._groups) >= _MAX_GROUPS and not self._make_room(deviation):
                 self._ungrouped[SEVERITY[deviation.kind]] += 1
                 return
             group = self._groups[key] = _Group()
+            if SEVERITY[deviation.kind] is not Severity.ERROR:
+                self._notes.append(key)
         group.places += 1
         if group.last_submodel != self.checked:
             group.last_submodel = self.checked

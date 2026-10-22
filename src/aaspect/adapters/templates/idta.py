@@ -108,13 +108,13 @@ class IdtaTemplates:
         pool = ThreadPoolExecutor(self._workers)
         try:
             files = list(pool.map(lambda entry: self._file(entry, deadline), self._entries()))
+            catalogue = Catalogue(files)
         except Exception:  # Any failure leaves the templates unavailable until a retry.
             logger.warning("Downloading the IDTA submodel templates failed", exc_info=True)
             return False
         finally:
             # The first failure decides; the files not yet fetched are not waited for.
             pool.shutdown(wait=False, cancel_futures=True)
-        catalogue = Catalogue(files)
         with self._lock:
             self._catalogue = catalogue
         logger.info("Downloaded %d IDTA submodel templates", len(files))

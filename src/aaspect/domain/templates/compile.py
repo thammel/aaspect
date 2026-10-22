@@ -12,7 +12,13 @@ _CARDINALITIES = {
     "OneToMany": Cardinality(1, None),
     "ZeroToMany": Cardinality(0, None),
 }
-_WILDCARD_IDS = frozenset({"non_empty_value", "semanticidnotavailable"})
+_WILDCARD_IDS = frozenset(
+    {
+        "non_empty_value",
+        "semanticidnotavailable",
+        "https://admin-shell.io/smt/general/arbitrary",
+    }
+)
 # Elements whose children are compared: a collection's and a list's value, an entity's
 # statements.
 _CHILDREN = {
@@ -72,10 +78,7 @@ def _is_wildcard(id_short: str | None, semantic_id: str | None) -> bool:
     semanticId no real element carries."""
     if id_short is not None and "arbitrary" in id_short.lower():
         return True
-    if semantic_id is None:
-        return False
-    marker = semantic_id.strip().lower()
-    return marker in _WILDCARD_IDS or "example.com/" in marker
+    return semantic_id is not None and semantic_id.strip().lower() in _WILDCARD_IDS
 
 
 def _cardinality(qualifiers: object) -> Cardinality | None:
