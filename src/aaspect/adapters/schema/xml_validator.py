@@ -4,6 +4,7 @@ import threading
 from lxml import etree
 
 from aaspect.adapters.schema.violations import capped, unchecked, violation
+from aaspect.domain.metamodel import DETAILS
 from aaspect.domain.schema_check import SchemaViolation
 
 
@@ -31,9 +32,11 @@ class XmlSchemaValidator:
         return capped((_from_entry(root, entry) for entry in entries), self._max_violations)
 
 
-# libxml2 names every element with its full namespace ("{https://admin-shell.io/aas/3/0}id"),
-# which repeats the version the finding already states and makes each message long.
-_AAS_NAMESPACE = re.compile(r"\{https://admin-shell\.io/aas/3/[0-9]\}")
+# libxml2 names every element with its full namespace ("{<namespace>}id"), which repeats
+# the version the finding already states and makes each message long.
+_AAS_NAMESPACE = re.compile(
+    "|".join(re.escape("{" + details.xml_namespace + "}") for details in DETAILS.values())
+)
 
 
 def _safe_parser() -> etree.XMLParser:

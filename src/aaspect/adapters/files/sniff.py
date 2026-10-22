@@ -6,13 +6,10 @@ from enum import Enum
 from lxml import etree
 
 from aaspect.domain.corpus import AasDocument, DocumentFormat
-from aaspect.domain.metamodel import MetamodelVersion
+from aaspect.domain.metamodel import DETAILS, MetamodelVersion
 
-_NAMESPACES = {
-    "https://admin-shell.io/aas/3/0": MetamodelVersion.V3_0,
-    "https://admin-shell.io/aas/3/1": MetamodelVersion.V3_1,
-    "https://admin-shell.io/aas/3/2": MetamodelVersion.V3_2,
-}
+_NAMESPACES = {details.xml_namespace: version for version, details in DETAILS.items()}
+_KNOWN = ", ".join(version.value for version in MetamodelVersion)
 _UTF8_BOM = b"\xef\xbb\xbf"
 _UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
 _ZIP_MAGIC = b"PK\x03\x04"
@@ -75,7 +72,7 @@ def xml_version(content: bytes) -> MetamodelVersion:
         return _NAMESPACES[namespace]
     except KeyError:
         quoted = namespace[:_MAX_QUOTED] or "(none)"
-        raise Unreadable(f"XML namespace {quoted} is not AAS metamodel 3.0, 3.1 or 3.2") from None
+        raise Unreadable(f"XML namespace {quoted} is not AAS metamodel {_KNOWN}") from None
 
 
 def _first_character(content: bytes) -> str | None:
