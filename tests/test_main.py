@@ -7,11 +7,14 @@ from dataclasses import replace
 
 from fastapi.testclient import TestClient
 
+from aaspect.adapters.schema.validator import download_schemas
 from aaspect.config.settings import Settings
 from aaspect.domain.metamodel import MetamodelVersion
-from aaspect.main import build_app
+from aaspect.domain.pinned import PinnedFile
+from aaspect.main import build_app, wait_for_schemas
 from tests.adapters.files.packages import aasx
 from tests.adapters.schema.samples import sample
+from tests.pinned import cached
 
 V3_0, V3_2 = MetamodelVersion.V3_0, MetamodelVersion.V3_2
 
@@ -28,7 +31,7 @@ class TestEndToEnd(unittest.TestCase):
         ]
         settings = replace(Settings(), validation_workers=2, allowed_hosts="testserver")
         with ExitStack() as resources:
-            client = TestClient(build_app(settings, resources))
+            client = TestClient(build_app(settings, resources, download_schemas(cached)))
             response = client.post("/analyses", files=files, data={"version": "auto"})
             self.assertEqual(response.status_code, 200)
             self.assertIn("Version per file", response.text)
@@ -52,6 +55,25 @@ class TestEndToEnd(unittest.TestCase):
         )
         self.assertEqual(blocks["unreadable-file"]["locations"][0]["file"], "notes.txt")
         self.assertEqual(blocks["required"]["locations"][0]["file"], "broken.json")
+
+
+class TestWaitForSchemas(unittest.TestCase):
+    def test_tries_again_with_growing_pauses_until_they_arrive(self) -> None:
+        failures = iter([OSError("offline"), ValueError("changed file")])
+        pauses: list[float] = []
+
+        def download(pinned: PinnedFile) -> bytes:
+            failure = next(failures, None)
+            if failure is not None:
+                raise failure
+            return cached(pinned)
+
+        with self.assertLogs("aaspect.main", "WARNING") as logs:
+            schemas = wait_for_schemas(download, pauses.append)
+        self.assertEqual(set(schemas), set(MetamodelVersion))
+        self.assertEqual(pauses, [30, 60])
+        # A changed file is the operator's to fix; the network may mend itself.
+        self.assertEqual([record.levelname for record in logs.records], ["WARNING", "ERROR"])
 
 
 if __name__ == "__main__":

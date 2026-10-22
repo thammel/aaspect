@@ -1,13 +1,15 @@
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import NoReturn
 
 from aaspect.adapters.schema.isolated import IsolatedSchemaValidator
-from aaspect.adapters.schema.validator import OfficialSchemaValidator
+from aaspect.adapters.schema.validator import OfficialSchemaValidator, download_schemas
 from aaspect.domain.corpus import AasDocument, DocumentFormat
 from aaspect.domain.metamodel import MetamodelVersion
 from tests.adapters.schema.fake_validators import BrokenAtStartup, Misbehaving
+from tests.pinned import cached
 
 V3_1, V3_2 = MetamodelVersion.V3_1, MetamodelVersion.V3_2
 
@@ -112,7 +114,10 @@ class TestSlowPatternInXml(unittest.TestCase):
         ).encode()
         document = AasDocument("x.xml", DocumentFormat.XML, content, declared_version=V3_1)
         validator = IsolatedSchemaValidator(
-            OfficialSchemaValidator, workers=1, timeout_seconds=3, memory_bytes=2_000_000_000
+            partial(OfficialSchemaValidator, download_schemas(cached)),
+            workers=1,
+            timeout_seconds=3,
+            memory_bytes=2_000_000_000,
         )
         try:
             started = time.perf_counter()

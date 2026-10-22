@@ -8,9 +8,15 @@ from aaspect.adapters.schema.violations import capped, unchecked, violation
 from aaspect.domain.schema_check import SchemaViolation
 
 
+def _no_retrieval(uri: str) -> Any:
+    # The official schemas refer only to their own definitions. A reference elsewhere would
+    # make compiling fetch a URL or read a local file.
+    raise ValueError("schemas may not refer to other documents")
+
+
 class JsonSchemaValidator:
     def __init__(self, schema: dict[str, Any], max_violations: int) -> None:
-        self._validator = jsonschema_rs.validator_for(prepare(schema))
+        self._validator = jsonschema_rs.validator_for(prepare(schema), retriever=_no_retrieval)
         self._max_violations = max_violations
 
     def validate(self, content: bytes) -> list[SchemaViolation]:

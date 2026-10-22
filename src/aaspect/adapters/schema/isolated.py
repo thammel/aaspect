@@ -90,12 +90,19 @@ class _Worker:
     def __init__(self, factory: Callable[[], SchemaValidator], memory: int) -> None:
         self._connection, child = _CONTEXT.Pipe()
         self._process: BaseProcess = _CONTEXT.Process(
-            target=_serve, args=(child, factory, memory), daemon=True
+            target=_serve, args=(child, memory), daemon=True
         )
         self._process.start()
         child.close()
         self._memory = memory
         self.alive = True
+        # Sent over the connection, not as a start argument: the factory carries the
+        # schemas, and a start argument larger than the pipe buffer blocks the parent for
+        # good if the new process dies before reading it.
+        try:
+            self._connection.send(factory)
+        except (BrokenPipeError, ConnectionError, EOFError, OSError):
+            self.stop()
 
     def run(
         self, document: AasDocument, version: MetamodelVersion, timeout: float
@@ -135,8 +142,12 @@ class _Worker:
         self._connection.close()
 
 
-def _serve(connection: Connection, factory: Callable[[], SchemaValidator], memory: int) -> None:
+def _serve(connection: Connection, memory: int) -> None:
     resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+    try:
+        factory = connection.recv()
+    except EOFError:
+        return
     validator = factory()
     while True:
         try:

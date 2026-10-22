@@ -10,7 +10,7 @@ from aaspect.domain.schema_check import SchemaViolation
 
 class XmlSchemaValidator:
     def __init__(self, xsd: bytes, max_violations: int) -> None:
-        self._schema = etree.XMLSchema(etree.fromstring(xsd, _safe_parser()))
+        self._schema = etree.XMLSchema(_self_contained(etree.fromstring(xsd, _safe_parser())))
         self._max_violations = max_violations
         # The error log lives on the shared schema object, so concurrent validations
         # would read each other's errors.
@@ -37,6 +37,18 @@ class XmlSchemaValidator:
 _AAS_NAMESPACE = re.compile(
     "|".join(re.escape("{" + details.xml_namespace + "}") for details in DETAILS.values())
 )
+
+
+_XSD = "{http://www.w3.org/2001/XMLSchema}"
+_REFERENCES = (_XSD + "include", _XSD + "import", _XSD + "redefine", _XSD + "override")
+
+
+def _self_contained(schema: etree._Element) -> etree._Element:
+    """The official schemas are single files. libxml2 would load an included or imported
+    one from the local file system, whatever the parser allows."""
+    if schema.getroottree().docinfo.doctype or any(schema.iter(*_REFERENCES)):
+        raise ValueError("schemas may not refer to other documents or declare a DTD")
+    return schema
 
 
 def _safe_parser() -> etree.XMLParser:

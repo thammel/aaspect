@@ -3,12 +3,12 @@ from collections.abc import Callable
 
 from lxml import etree
 
-from aaspect.adapters.schema.validator import _schema_file
 from aaspect.adapters.schema.xml_validator import XmlSchemaValidator
 from aaspect.domain.corpus import AasDocument, DocumentFormat
-from aaspect.domain.metamodel import MetamodelVersion
+from aaspect.domain.metamodel import DETAILS, MetamodelVersion
 from aaspect.domain.schema_check import SchemaViolation
 from tests.adapters.schema.samples import official_validator, sample
+from tests.pinned import cached
 
 V3_0, V3_2 = MetamodelVersion.V3_0, MetamodelVersion.V3_2
 NS = "{https://admin-shell.io/aas/3/2}"
@@ -106,7 +106,7 @@ class TestViolations(unittest.TestCase):
 
 class TestViolationCap(unittest.TestCase):
     def test_cap_and_note(self) -> None:
-        validator = XmlSchemaValidator(_schema_file(V3_2, "AAS.xsd"), max_violations=2)
+        validator = XmlSchemaValidator(cached(DETAILS[V3_2].xml_schema), max_violations=2)
         submodels = b"<submodel><kind>Instance</kind></submodel>" * 10
         content = (
             b'<environment xmlns="https://admin-shell.io/aas/3/2"><submodels>'

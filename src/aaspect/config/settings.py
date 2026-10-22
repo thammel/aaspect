@@ -31,6 +31,9 @@ class Settings:
     validation_timeout_seconds: int = 30
     analysis_time_limit_seconds: int = 600
     worker_memory_bytes: int = 2048 * _MIB
+    # Where third-party files such as the official schemas are downloaded from at startup:
+    # GitHub's raw file server, or a mirror with the same paths.
+    download_url: str = "https://raw.githubusercontent.com"
 
 
 def load_settings(environment: Mapping[str, str]) -> Settings:

@@ -1,29 +1,50 @@
 """Composition root: the only place that constructs adapters and wires them together."""
 
+import logging
 import os
+import signal
+import sys
+import time
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from functools import partial
 from importlib.metadata import version
+from urllib.error import HTTPError
 
 import uvicorn
 from fastapi import FastAPI
 
+from aaspect.adapters.download.github import GithubDownload
 from aaspect.adapters.files.aasx import ArchiveLimits
 from aaspect.adapters.files.reader import FileCorpusReader
 from aaspect.adapters.report_json.writer import JsonReportWriter
 from aaspect.adapters.schema.isolated import IsolatedSchemaValidator
-from aaspect.adapters.schema.validator import OfficialSchemaValidator
+from aaspect.adapters.schema.validator import (
+    OfficialSchemas,
+    OfficialSchemaValidator,
+    download_schemas,
+)
 from aaspect.adapters.web.app import create_app
 from aaspect.adapters.web.routes import WebLimits
 from aaspect.app.analyze_corpus import AnalyzeCorpus
 from aaspect.config.settings import Settings, load_settings
+from aaspect.domain.metamodel import MetamodelVersion
+from aaspect.ports.download import Download
+
+logger = logging.getLogger(__name__)
+_FIRST_PAUSE_SECONDS = 30
+_LAST_PAUSE_SECONDS = 15 * 60
 
 
-def build_app(settings: Settings, resources: ExitStack) -> FastAPI:
+def build_app(
+    settings: Settings,
+    resources: ExitStack,
+    schemas: Mapping[MetamodelVersion, OfficialSchemas],
+) -> FastAPI:
     """The web app; worker processes and threads are released when `resources` closes."""
     validator = IsolatedSchemaValidator(
-        partial(OfficialSchemaValidator, settings.max_violations_per_document),
+        partial(OfficialSchemaValidator, schemas, settings.max_violations_per_document),
         workers=settings.validation_workers,
         timeout_seconds=settings.validation_timeout_seconds,
         memory_bytes=settings.worker_memory_bytes,
@@ -57,10 +78,39 @@ def build_app(settings: Settings, resources: ExitStack) -> FastAPI:
     return create_app(analyze.run, JsonReportWriter(), limits, allowed_hosts)
 
 
+def wait_for_schemas(
+    download: Download, sleep: Callable[[float], None] = time.sleep
+) -> dict[MetamodelVersion, OfficialSchemas]:
+    """The official schemas, downloaded at startup: without them nothing can be checked,
+    so the server waits for them, trying again with growing pauses until they arrive."""
+    pause = _FIRST_PAUSE_SECONDS
+    while True:
+        try:
+            return download_schemas(download)
+        except Exception as error:  # Any failure: the network, the mirror, a changed file.
+            # A changed file or a missing path will not mend itself; the operator must act.
+            permanent = isinstance(error, ValueError) or (
+                isinstance(error, HTTPError) and 400 <= error.code < 500 and error.code != 429
+            )
+            logger.log(
+                logging.ERROR if permanent else logging.WARNING,
+                "Downloading the official AAS schemas failed (%s); trying again in %d s",
+                type(error).__name__,
+                pause,
+                exc_info=not permanent,
+            )
+        sleep(pause)
+        pause = min(pause * 2, _LAST_PAUSE_SECONDS)
+
+
 def main() -> None:
     settings = load_settings(os.environ)
+    # Uvicorn handles stop signals only once it runs; while the schemas are awaited, a
+    # container stop would otherwise wait for its kill.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    schemas = wait_for_schemas(GithubDownload(settings.download_url))
     with ExitStack() as resources:
-        uvicorn.run(build_app(settings, resources), host=settings.host, port=settings.port)
+        uvicorn.run(build_app(settings, resources, schemas), host=settings.host, port=settings.port)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,10 @@ analysis, view the results in the browser and download them as **JSON** or **PDF
 ### Compliance
 
 - **Schema check** *(available)*: validate every file against the official AAS JSON and
-  XML schemas (metamodel V3.0, V3.1, V3.2) and group recurring schema violations.
+  XML schemas (metamodel V3.0, V3.1, V3.2) and group recurring schema violations. The
+  schemas are IDTA's (CC BY 4.0) and are not shipped: AASpect downloads them at startup
+  from [admin-shell-io/aas-specs-metamodel](https://github.com/admin-shell-io/aas-specs-metamodel),
+  pinned to one commit per version and checked by size and SHA-256.
 - **Metamodel constraints** *(planned)*: import the corpus into Neo4j with neo4aas and
   evaluate the `AASd-xxx` constraints of the metamodel (IDTA-01001) with its constraint
   checker. Violations are reported per constraint and per file.
@@ -61,6 +64,11 @@ Upload AASX, JSON or XML files, or a whole folder, and choose a metamodel versio
 violations; it can be downloaded as JSON. Reports are kept in memory only and are lost
 when the server stops.
 
+At startup the server downloads the official schemas (about 330 KB) and serves nothing
+before they have arrived. While the download fails it logs why and tries again, with
+pauses growing from 30 seconds to 15 minutes; a changed file or a missing path is logged
+as an error, since it needs the operator.
+
 ## Configuration
 
 AASpect reads `AASPECT_*` environment variables once at startup, e.g.
@@ -103,6 +111,12 @@ unpacks anything to disk.
 | `AASPECT_MAX_COMPRESSION_RATIO` | `200` | Unpacked size divided by packed size of one part. AAS data reaches about 60; ZIP bombs reach thousands. |
 | `AASPECT_MAX_AAS_PARTS` | `100` | AAS parts named by one package. A part named twice is read once. |
 
+### Downloads
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AASPECT_DOWNLOAD_URL` | `https://raw.githubusercontent.com` | Where third-party files, such as the official schemas, are downloaded from: GitHub's raw file server, or a mirror serving the same paths (`<repository>/<commit>/<path>`). HTTPS only, no redirects, through the proxy in `HTTPS_PROXY` if set; each file is checked against its pinned size and SHA-256, so a mirror cannot change it. No user or password in the URL. |
+
 ### Schema validation
 
 Each validation runs in a separate worker process, which is killed and replaced when it
@@ -134,20 +148,23 @@ only on those two. `main.py` alone wires the adapters to the use-cases.
 ```text
 src/aaspect/
 ├── domain/        Analysis rules and result types: report sections, findings, tables,
-│                  metamodel versions, version selection, grouping of violations.
-│                  Pure Python, no I/O.
+│                  version selection, grouping of violations. Pure Python, no I/O.
+│                  metamodel.py holds everything that differs between metamodel
+│                  versions: names, XML namespaces, pinned schemas.
 ├── ports/         Interfaces the use-cases depend on: read uploads, validate a
-│                  document, write a report.
+│                  document, write a report, download a pinned file.
 ├── app/           Use-cases: analyze a corpus, run the schema check.
 ├── adapters/      Implementations of the ports, one package per outside concern:
 │   ├── files/         read JSON, XML and AASX uploads in memory, within limits
+│   ├── download/      download pinned files over HTTPS
 │   ├── schema/        validate with jsonschema-rs and lxml in isolated worker
-│   │                  processes; official schemas under schemas/
+│   │                  processes
 │   ├── report_json/   JSON report download
 │   └── web/           FastAPI + Jinja2 UI, templates/ and static/
 ├── config/        Settings from AASPECT_* environment variables
 └── main.py        Composition root: builds the adapters and starts the server
-tests/             Mirrors src/aaspect/; tests/test_main.py drives the whole app over HTTP
+tests/             Mirrors src/aaspect/; tests/test_main.py drives the whole app over HTTP.
+                   Pinned third-party files are downloaded once into .cache/
 ```
 
 ---
