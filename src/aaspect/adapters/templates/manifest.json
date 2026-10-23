@@ -13,7 +13,7 @@
     0,
     9
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "aeab2e98efa055d58aa3495ad87a6d87f04a83e1b6c614881bb0e53574327ae1"
   },
   {
@@ -26,7 +26,7 @@
     1,
     0
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "f826f534e03ca1f41622a7d6c6e4399921b065e1c33d7d5ce4ecf8ad394aadbc"
   },
   {
@@ -39,7 +39,7 @@
     1,
     0
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "298f8f8923b8ee8e8f26777822b2977736e03064d2a48e50630ee021f19fd42b"
   },
   {
@@ -52,7 +52,7 @@
     2,
     0
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "c02ad784b58560de5c8d5ca4790c2130d9aacd593aa3e3a4ca2cb276f1f58cf4"
   },
   {
@@ -65,7 +65,7 @@
     1,
     2
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "7a29de3148f9036b11d2069cb2a360ee60e6fe4104f99437893bccb66fe6a14b"
   },
   {
@@ -78,7 +78,7 @@
     1,
     1
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "9eba5e14272c5ff3dc404cbf2a427a533a15e8451a23ca306b1ab447b835577b"
   },
   {
@@ -92,7 +92,7 @@
     2,
     1
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "d3f0f32b66dac7858f5e25b40625d98aacf5eb74e9bb0d61c5cc704b895c7881"
   },
   {
@@ -105,7 +105,7 @@
     1,
     2
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "1badabb65513577af84821976ffc5e1056814fa8d4f31260d3869755082ff364"
   },
   {
@@ -118,7 +118,7 @@
     1,
     0
    ],
-   "tier": "withdrawn",
+   "tier": "deprecated",
    "sha256": "1a330d3356cd9b0532d220a127f105090572ac0899c470ade8ed69d42aeda927"
   },
   {

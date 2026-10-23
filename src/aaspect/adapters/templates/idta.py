@@ -21,7 +21,7 @@ from aaspect.ports.download import Download
 
 logger = logging.getLogger(__name__)
 
-_TIERS = {"current": Tier.CURRENT, "superseded": Tier.SUPERSEDED, "withdrawn": Tier.WITHDRAWN}
+_TIERS = {"current": Tier.CURRENT, "superseded": Tier.SUPERSEDED, "deprecated": Tier.DEPRECATED}
 _UNAVAILABLE = (
     "The IDTA submodel templates are not available: their download has not succeeded yet."
     " The server log has the details."

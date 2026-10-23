@@ -46,7 +46,7 @@ class TestCatalogue(unittest.TestCase):
     def test_lookup_by_tier_then_newest_version(self) -> None:
         catalogue = Catalogue(
             [
-                _file("old", Tier.WITHDRAWN, _submodel("urn:nameplate")),
+                _file("old", Tier.DEPRECATED, _submodel("urn:nameplate")),
                 _file("v1", Tier.SUPERSEDED, _submodel("urn:nameplate"), version=(1, 0)),
                 _file("v1.0.2", Tier.SUPERSEDED, _submodel("urn:nameplate"), version=(1, 0, 2)),
                 _file("custom", Tier.CUSTOM, _submodel("urn:mine")),
@@ -63,7 +63,7 @@ class TestCatalogue(unittest.TestCase):
     def test_exact_semantic_id_before_one_without_version(self) -> None:
         catalogue = Catalogue(
             [
-                _file("1.2", Tier.WITHDRAWN, _submodel("0173-1#01-AHF578#001")),
+                _file("1.2", Tier.DEPRECATED, _submodel("0173-1#01-AHF578#001")),
                 _file("2.0", Tier.CURRENT, _submodel("0173-1#01-AHF578#003")),
             ]
         )

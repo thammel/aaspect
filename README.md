@@ -38,7 +38,7 @@ is over distinct contents: an object repeated identically in many files counts o
   shell (count, min, max, mean, median, standard deviation).
 - **Submodels:** which submodels are used, and how often, grouped by semanticId and named
   by their most frequent idShort. Split by origin: the IDTA template their semanticId
-  names (current, superseded or withdrawn edition, see template conformance), else the
+  names (current, superseded or deprecated edition, see template conformance), else the
   dictionary of the identifier (IDTA `admin-shell.io`, ECLASS, IEC CDD or proprietary).
 - **Semantic IDs:** semanticIds and supplementalSemanticIds of SubmodelElements, their
   identification schemes (IRDI, IRI, URN, UUID, other) and the dictionaries they point
@@ -62,7 +62,7 @@ their first 256 characters.
 
 - Match each submodel to its IDTA submodel template by its semanticId, ignoring the
   version of an IRDI. A current edition is preferred over a superseded one, and a
-  superseded one over a withdrawn one; the report names which was used.
+  superseded one over a deprecated one; the report names which was used.
 - Report missing mandatory elements, cardinality violations, wrong element or value
   types (errors), and elements the template does not define, other idShorts and other
   semanticId versions (notes). Elements are matched by semanticId, ignoring IRDI

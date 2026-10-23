@@ -100,7 +100,7 @@ def _entry(folder: str, blob: dict) -> dict:
         "family": "/".join(parts[:first_number]),
         "priority": 0 if first_number <= 2 else 1,
         "version": version,
-        "tier": "withdrawn" if parts[0] == "deprecated" else "superseded",
+        "tier": "deprecated" if parts[0] == "deprecated" else "superseded",
     }
 
 

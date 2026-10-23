@@ -16,7 +16,7 @@ class Tier(StrEnum):
     CUSTOM = "uploaded"
     CURRENT = "IDTA, current"
     SUPERSEDED = "IDTA, superseded"
-    WITHDRAWN = "IDTA, withdrawn"
+    DEPRECATED = "IDTA, deprecated"
 
 
 @dataclass(frozen=True, slots=True)

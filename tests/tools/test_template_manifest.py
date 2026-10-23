@@ -31,8 +31,8 @@ class TestChoose(unittest.TestCase):
         }
         self.assertEqual(tiers["0"], ("superseded", [3, 0]))
         self.assertEqual(tiers["2"], ("current", [3, 0, 2]))
-        withdrawn = next(entry for entry in chosen if entry["path"].startswith("deprecated"))
-        self.assertEqual((withdrawn["tier"], withdrawn["version"]), ("withdrawn", [2, 0]))
+        deprecated = next(entry for entry in chosen if entry["path"].startswith("deprecated"))
+        self.assertEqual((deprecated["tier"], deprecated["version"]), ("deprecated", [2, 0]))
 
     def test_part_numbers_are_no_edition_and_parts_are_profiles(self) -> None:
         chosen = manifest._choose(

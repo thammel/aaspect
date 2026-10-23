@@ -119,7 +119,7 @@ class TestIdtaTemplates(unittest.TestCase):
                 set(entry),
                 {"path", "sha", "sha256", "size", "family", "priority", "version", "tier"},
             )
-            self.assertIn(entry["tier"], ("current", "superseded", "withdrawn"))
+            self.assertIn(entry["tier"], ("current", "superseded", "deprecated"))
 
 
 if __name__ == "__main__":
