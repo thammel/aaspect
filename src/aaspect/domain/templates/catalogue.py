@@ -58,6 +58,7 @@ class Catalogue:
         files: Iterable[TemplateFile],
         base: "Catalogue | None" = None,
         problems: Iterable[CatalogueProblem] = (),
+        unavailable: str | None = None,
     ) -> None:
         """`files` added to `base`, which stays as it is: the IDTA catalogue is compiled
         once and extended per analysis by the templates uploaded with it."""
@@ -75,6 +76,8 @@ class Catalogue:
             self.duplicates = base.duplicates
             self.files = base.files
         self.problems.extend(problems)
+        # Why the templates a base would have given are missing, if they are.
+        self.unavailable = unavailable
         tiers = list(Tier)
         ordered = sorted(
             files,

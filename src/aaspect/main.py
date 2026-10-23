@@ -56,7 +56,7 @@ def build_app(
     pool = resources.enter_context(ThreadPoolExecutor(settings.validation_workers))
     graph_store = _graph_store(settings, resources)
     analyze = AnalyzeCorpus(
-        _reader(settings),
+        _reader(settings, settings.max_document_bytes),
         validator,
         version("aaspect"),
         pool.map,
@@ -65,13 +65,18 @@ def build_app(
         parser=Neo4aasEnvironmentParser(),
         # Templates are checked in the graph; without one, nothing is downloaded.
         templates=_templates(download) if graph_store else None,
+        template_reader=_reader(settings, settings.max_template_bytes) if graph_store else None,
     )
     limits = WebLimits(
         max_upload_bytes=settings.max_upload_bytes,
         max_files=settings.max_files,
         max_concurrent_analyses=settings.max_concurrent_analyses,
         max_stored_reports=settings.max_stored_reports,
-        templates=TemplateLimits(settings.max_template_files, settings.max_template_bytes),
+        templates=(
+            TemplateLimits(settings.max_template_files, settings.max_template_bytes)
+            if graph_store
+            else None
+        ),
     )
     allowed_hosts = [host.strip() for host in settings.allowed_hosts.split(",") if host.strip()]
     return create_app(analyze.run, JsonReportWriter(), limits, allowed_hosts)
@@ -92,7 +97,7 @@ def _validator(
     return validator
 
 
-def _reader(settings: Settings) -> FileCorpusReader:
+def _reader(settings: Settings, max_document_bytes: int) -> FileCorpusReader:
     return FileCorpusReader(
         ArchiveLimits(
             max_part_bytes=settings.max_part_bytes,
@@ -100,7 +105,7 @@ def _reader(settings: Settings) -> FileCorpusReader:
             max_compression_ratio=settings.max_compression_ratio,
             max_parts=settings.max_aas_parts,
         ),
-        max_document_bytes=settings.max_document_bytes,
+        max_document_bytes=max_document_bytes,
     )
 
 

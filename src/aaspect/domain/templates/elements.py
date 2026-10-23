@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 # Templates and instances nest no deeper than this; a deeper template is refused, and
 # deeper instance elements are never compared.
@@ -59,7 +60,7 @@ def id_short_matches(template: str | None, instance: str | None) -> bool:
     instances number it anyway: ProductImage01 fits ProductImage."""
     if template is None or instance is None:
         return template == instance
-    pieces = _PLACEHOLDER.split(template)
+    pieces = _pieces(template)
     if len(pieces) == 1:
         rest = instance.removeprefix(template)
         return rest == "" or (len(rest) < len(instance) and rest.isdigit())
@@ -73,3 +74,9 @@ def id_short_matches(template: str | None, instance: str | None) -> bool:
             return False
         position = found + len(piece)
     return position <= end
+
+
+@lru_cache(maxsize=4096)
+def _pieces(template: str) -> tuple[str, ...]:
+    # Matched against every sibling of every submodel; split once per template idShort.
+    return tuple(_PLACEHOLDER.split(template))

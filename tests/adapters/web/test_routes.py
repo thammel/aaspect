@@ -2,6 +2,7 @@ import json
 import threading
 import unittest
 from collections.abc import Iterator, Sequence
+from dataclasses import replace
 
 from fastapi.testclient import TestClient
 
@@ -16,12 +17,14 @@ from aaspect.domain.report import Report
 from aaspect.domain.version_selection import AutoOrder, VersionChoice
 from tests.adapters.web.reports import XSS, full_report
 
+_TEMPLATES = TemplateLimits(max_files=2, max_bytes=100)
+_TEMPLATES = TemplateLimits(max_files=2, max_bytes=100)
 LIMITS = WebLimits(
     max_upload_bytes=10_000,
     max_files=3,
     max_concurrent_analyses=1,
     max_stored_reports=2,
-    templates=TemplateLimits(max_files=2, max_bytes=100),
+    templates=_TEMPLATES,
 )
 
 HOSTS = ["testserver"]
@@ -93,15 +96,21 @@ class TestRoutes(unittest.TestCase):
     def test_template_limits(self) -> None:
         too_many = [
             ("templates", (f"t{n}.json", b"{}", "application/json"))
-            for n in range(LIMITS.templates.max_files + 1)
+            for n in range(_TEMPLATES.max_files + 1)
         ]
         self.assertEqual(self._upload(_files("a.json") + too_many).status_code, 400)
-        big = [("templates", ("big.json", b" " * (LIMITS.templates.max_bytes + 1), "x/y"))]
+        big = [("templates", ("big.json", b" " * (_TEMPLATES.max_bytes + 1), "x/y"))]
         self.assertEqual(self._upload(_files("a.json") + big).status_code, 413)
         self.assertEqual(self.analyze.calls, [])
 
-    def test_the_form_offers_templates(self) -> None:
+    def test_the_form_offers_templates_only_where_they_are_checked(self) -> None:
         self.assertIn('name="templates"', self.client.get("/").text)
+        without = replace(LIMITS, templates=None)
+        client = TestClient(create_app(self.analyze, JsonReportWriter(), without, HOSTS))
+        self.assertNotIn('name="templates"', client.get("/").text)
+        templates = [("templates", ("mine.json", b"{}", "application/json"))]
+        client.post("/analyses", files=_files("a.json") + templates, data={"version": "auto"})
+        self.assertEqual(self.analyze.templates[-1], [])
 
     def test_version_choices(self) -> None:
         for value, choice in (

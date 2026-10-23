@@ -44,16 +44,19 @@ class UploadRejected(Exception):
         self.message = message
 
 
-async def read_form(request: Request, max_files: int, limits: TemplateLimits) -> Submission:
+async def read_form(request: Request, max_files: int, limits: TemplateLimits | None) -> Submission:
+    """`limits` None: the form offers no templates, and any sent are ignored."""
+    template_files = limits.max_files if limits else 0
     try:
         async with request.form(
-            max_files=max_files + limits.max_files,
+            # Each file field sends one part even when left empty.
+            max_files=max_files + template_files + 2,
             max_fields=_MAX_FIELDS,
             max_part_size=_MAX_FIELD_BYTES,
         ) as form:
             version = _version(form.get("version"))
             files = await _contents(form.getlist("files"))
-            templates = await _contents(form.getlist("templates"))
+            templates = await _contents(form.getlist("templates")) if limits else []
     except HTTPException as error:
         # Starlette reports multipart limits (too many files, oversized field) this way.
         raise UploadRejected(400, str(error.detail)) from error
@@ -63,6 +66,8 @@ async def read_form(request: Request, max_files: int, limits: TemplateLimits) ->
     if len(uploads) > max_files:
         raise UploadRejected(400, f"At most {max_files} files can be analyzed at once.")
     chosen = _uploads(templates)
+    if limits is None:
+        return Submission(uploads, version, [])
     if len(chosen) > limits.max_files:
         raise UploadRejected(400, f"At most {limits.max_files} template files can be uploaded.")
     if sum(len(upload.content) for upload in chosen) > limits.max_bytes:

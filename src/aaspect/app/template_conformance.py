@@ -3,7 +3,6 @@
 from collections.abc import Callable, Iterator, Sequence
 
 from aaspect.app.import_corpus import ImportResult
-from aaspect.domain.analytics.tables import text
 from aaspect.domain.blocks import Block, Finding, Location, Severity
 from aaspect.domain.id_collisions import Occurrence
 from aaspect.domain.report import Section, SectionStatus
@@ -11,7 +10,8 @@ from aaspect.domain.templates.catalogue import Catalogue, CatalogueProblem, Temp
 from aaspect.domain.templates.check import deviations
 from aaspect.domain.templates.instances import SubmodelRef
 from aaspect.domain.templates.report import catalogue_table, summary_table, template_table
-from aaspect.domain.templates.tally import ConformanceTally
+from aaspect.domain.templates.tally import ConformanceTally, short
+from aaspect.domain.templates.work import TooMuchWork
 from aaspect.ports.submodel_trees import SubmodelTrees
 from aaspect.ports.template_source import TemplateSource
 
@@ -55,20 +55,32 @@ def check_templates(
     if expired() or not imported.finished:
         return _skipped("The analysis reached its time limit.")
     if not len(catalogue):
-        return _skipped("No submodel templates are available.")
+        notes = (*_unavailable(catalogue), *_problems(catalogue.problems))
+        return Section(
+            SECTION_KEY,
+            SECTION_TITLE,
+            SectionStatus.SKIPPED,
+            notes,
+            reason="No submodel templates are available.",
+        )
     refs = graph.submodel_refs()
     matched = [(ref, template) for ref in refs if (template := catalogue.lookup(ref.semantic_id))]
     checkable = [(ref, template) for ref, template in matched if ref.elements <= _MAX_ELEMENTS]
     tally = ConformanceTally()
+    too_complex: list[SubmodelRef] = []
     for chunk in _chunks(checkable):
-        if not _check(graph, chunk, imported.occurrences, tally, expired):
+        if not _check(graph, chunk, imported.occurrences, tally, too_complex, expired):
             break
     blocks: list[Block] = [
         summary_table(len(refs), tally, len(matched) - tally.checked),
         template_table(tally),
         catalogue_table(catalogue),
         *tally.findings(),
-        *_notes(len(matched) - len(checkable), len(checkable) - tally.checked),
+        *_unavailable(catalogue),
+        *_notes(
+            len(matched) - len(checkable) + len(too_complex),
+            len(checkable) - tally.checked - len(too_complex),
+        ),
         *_problems(catalogue.problems),
     ]
     return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, tuple(blocks))
@@ -92,9 +104,11 @@ def _check(
     chunk: Sequence[tuple[SubmodelRef, Template]],
     occurrences: Sequence[Occurrence],
     tally: ConformanceTally,
+    too_complex: list[SubmodelRef],
     expired: Callable[[], bool],
 ) -> bool:
-    """False once the time limit is reached."""
+    """False once the time limit is reached. A submodel whose comparison would take too
+    long goes to `too_complex`."""
     if expired():
         return False
     trees = {tree.node: tree for tree in graph.submodel_trees([ref.node for ref, _ in chunk])}
@@ -102,7 +116,13 @@ def _check(
         if expired():
             return False
         tree = trees.get(ref.node)
-        found = deviations(template.elements, tree.elements if tree else ())
+        try:
+            found = deviations(template.elements, tree.elements if tree else (), expired)
+        except TooMuchWork:
+            if expired():
+                return False
+            too_complex.append(ref)
+            continue
         tally.add(template, _location(ref, occurrences), found)
     return True
 
@@ -125,7 +145,8 @@ def _notes(too_large: int, not_reached: int) -> Iterator[Finding]:
             "template-too-large",
             Severity.WARNING,
             f"{too_large:,} submodels with a template not checked: each has more than"
-            f" {_MAX_ELEMENTS:,} elements.",
+            f" {_MAX_ELEMENTS:,} elements, or comparing it with its template would take too"
+            " long.",
         )
     if not_reached:
         yield Finding(
@@ -138,7 +159,9 @@ def _notes(too_large: int, not_reached: int) -> Iterator[Finding]:
 
 def _problems(problems: Sequence[CatalogueProblem]) -> Iterator[Finding]:
     if problems:
-        listed = "; ".join(f"{text(p.name)} ({p.reason})" for p in problems[:_LISTED_PROBLEMS])
+        listed = "; ".join(
+            f"{short(p.name)} ({short(p.reason)})" for p in problems[:_LISTED_PROBLEMS]
+        )
         more = (
             f"; and {len(problems) - _LISTED_PROBLEMS} more"
             if len(problems) > _LISTED_PROBLEMS
@@ -148,6 +171,15 @@ def _problems(problems: Sequence[CatalogueProblem]) -> Iterator[Finding]:
             "template-left-out",
             Severity.INFO,
             f"{len(problems)} templates left out: {listed}{more}.",
+        )
+
+
+def _unavailable(catalogue: Catalogue) -> Iterator[Finding]:
+    if catalogue.unavailable:
+        yield Finding(
+            "template-idta-unavailable",
+            Severity.WARNING,
+            f"Checked against the uploaded templates only: {catalogue.unavailable}",
         )
 
 

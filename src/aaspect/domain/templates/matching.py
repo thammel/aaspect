@@ -5,7 +5,11 @@ from collections.abc import Callable
 from aaspect.domain.templates.elements import Element, id_short_matches
 
 
-def assign(expected: tuple[Element, ...], actual: tuple[Element, ...]) -> list[list[int]]:
+def assign(
+    expected: tuple[Element, ...],
+    actual: tuple[Element, ...],
+    spend: Callable[[int], None] = lambda amount: None,
+) -> list[list[int]]:
     """For each template element, the indexes of the submodel elements it stands for;
     each submodel element goes to at most one. In passes, each on what is left: a
     template element's own semanticId; the exact idShort, then an idShort fitting a
@@ -27,14 +31,32 @@ def assign(expected: tuple[Element, ...], actual: tuple[Element, ...]) -> list[l
         if not element.wildcard and element.key is not None and element.key not in shared:
             for index in by_key.get(element.key, ()):
                 owner.setdefault(index, position)
-    _by_name(expected, actual, named, owner, by_key, lambda t, i: t == i)
-    _by_name(expected, actual, named, owner, by_key, id_short_matches)
+    _by_exact_name(expected, actual, named, owner, by_key)
+    _by_name(expected, actual, named, owner, by_key, spend)
     _by_type(expected, actual, shared, owner, by_key)
-    _wildcards(expected, actual, owner)
+    _wildcards(expected, actual, owner, spend)
     assigned: list[list[int]] = [[] for _ in expected]
     for index in sorted(owner):
         assigned[owner[index]].append(index)
     return assigned
+
+
+def _by_exact_name(
+    expected: tuple[Element, ...],
+    actual: tuple[Element, ...],
+    named: list[int],
+    owner: dict[int, int],
+    by_key: dict[str, list[int]],
+) -> None:
+    by_name: dict[str | None, list[int]] = {}
+    for index, candidate in enumerate(actual):
+        if index not in owner:
+            by_name.setdefault(candidate.id_short, []).append(index)
+    for position in named:
+        element = expected[position]
+        for index in by_name.get(element.id_short, ()):
+            if index not in owner and (element.key is None or actual[index].key == element.key):
+                owner[index] = position
 
 
 def _by_name(
@@ -43,14 +65,15 @@ def _by_name(
     named: list[int],
     owner: dict[int, int],
     by_key: dict[str, list[int]],
-    fits: Callable[[str | None, str | None], bool],
+    spend: Callable[[int], None],
 ) -> None:
     left = [index for index in range(len(actual)) if index not in owner]
     for position in named:
         element = expected[position]
         pool = left if element.key is None else by_key.get(element.key, ())
+        spend(len(pool))
         for index in pool:
-            if index not in owner and fits(element.id_short, actual[index].id_short):
+            if index not in owner and id_short_matches(element.id_short, actual[index].id_short):
                 owner[index] = position
 
 
@@ -79,11 +102,15 @@ def _by_type(
 
 
 def _wildcards(
-    expected: tuple[Element, ...], actual: tuple[Element, ...], owner: dict[int, int]
+    expected: tuple[Element, ...],
+    actual: tuple[Element, ...],
+    owner: dict[int, int],
+    spend: Callable[[int], None],
 ) -> None:
     for position, element in enumerate(expected):
         if not element.wildcard:
             continue
+        spend(len(actual))
         for index, candidate in enumerate(actual):
             if index not in owner and element.model_type in (None, candidate.model_type):
                 owner[index] = position

@@ -77,10 +77,13 @@ their first 256 characters.
   (CC BY 4.0) and checked against the hashes in
   `src/aaspect/adapters/templates/manifest.json`; AASpect ships none of them.
   `tools/template_manifest.py <commit>` moves to newer templates.
-- Own templates can be uploaded with an analysis, as AAS files (AASX, JSON or XML). They
-  are checked against before the IDTA templates, for that analysis only, and named
-  "uploaded" in the report; unreadable ones are listed. While the IDTA templates are not
-  available, the uploaded ones are used alone.
+- Own templates can be uploaded with an analysis, as AAS files (AASX, JSON or XML), when a
+  graph database is configured. Where an uploaded and an IDTA template match a submodel
+  equally (both exactly, or both only without the IRDI version), the uploaded one is
+  used; they count for that analysis only and are named "uploaded" in the report.
+  Unreadable or oversized ones are listed. While the IDTA templates are not available,
+  the uploaded ones are used alone, with a warning. A submodel whose comparison would
+  take too long is named, not checked.
 
 ### Deployment
 
@@ -155,10 +158,10 @@ part: 1 MB).
 | `AASPECT_MAX_FILES` | `2000` | Files per upload. A chosen folder is cut to this many files in the browser. |
 | `AASPECT_MAX_CONCURRENT_ANALYSES` | `2` | Analyses running at once. Further uploads get "busy, try again" before anything is read, so at most this many uploads are held in memory. |
 | `AASPECT_MAX_STORED_REPORTS` | `20` | Reports kept in memory; the oldest is dropped first. |
-| `AASPECT_MAX_DOCUMENT_BYTES` | `1073741824` (1 GB) | All documents of one analysis together, including parts unpacked from AASX packages. Documents beyond it are reported as not read. |
+| `AASPECT_MAX_DOCUMENT_BYTES` | `1073741824` (1 GB) | All documents of one analysis to analyze together, including parts unpacked from AASX packages. Documents beyond it are reported as not read. |
 | `AASPECT_ANALYSIS_TIME_LIMIT_SECONDS` | `600` (10 min) | Time for one analysis, all steps together. Documents not validated or imported by then are reported as not checked or not imported, and constraints not checked or analytics not computed by then are listed as such; a database query still running 5 seconds later is cancelled. Importing about 900 MB of dense XML into the graph took about 5 minutes on its own, so this may need to be raised for uploads near the size limit. |
 | `AASPECT_MAX_TEMPLATE_FILES` | `50` | Submodel template files uploaded with one analysis. |
-| `AASPECT_MAX_TEMPLATE_BYTES` | `52428800` (50 MB) | Those template files together. They are read like the corpus, with the same package limits. |
+| `AASPECT_MAX_TEMPLATE_BYTES` | `52428800` (50 MB) | Those template files together, and again the documents unpacked from them. They are read like the corpus, with the same package limits; a template with more than 5,000 elements, 1,000 siblings on one level, 16 list item kinds or an idShort longer than 128 characters is left out. |
 
 ### AASX packages
 

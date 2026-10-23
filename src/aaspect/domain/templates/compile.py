@@ -28,10 +28,23 @@ _CHILDREN = {
 }
 
 
+# Uploaded templates are untrusted, and the comparison grows with their size: the largest
+# IDTA template has about 1,000 elements and a few dozen siblings per level.
+MAX_ELEMENTS = 5_000
+_MAX_SIBLINGS = 1_000
+# Alternatives a list item is scored against.
+_MAX_ITEM_KINDS = 16
+# idShorts are at most 128 characters by the metamodel; identifiers get room to spare.
+_MAX_ID_SHORT = 128
+_MAX_IDENTIFIER = 2_048
+
+
 def template_elements(submodel: dict[str, Any]) -> tuple[Element, ...]:
     """The top-level elements of a template submodel. Raises `ValueError` on a template
-    nested deeper than `MAX_DEPTH`."""
-    return _elements(submodel.get("submodelElements"), 1)
+    larger than these bounds: nested deeper than `MAX_DEPTH`, more than `MAX_ELEMENTS`
+    elements, too many siblings or list item kinds, too long an idShort or id."""
+    budget = [MAX_ELEMENTS]
+    return _elements(submodel.get("submodelElements"), 1, budget, _MAX_SIBLINGS)
 
 
 def first_key(owner: dict[str, Any], name: str = "semanticId") -> str | None:
@@ -49,26 +62,38 @@ def text_of(owner: dict[str, Any], name: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _elements(raw: object, depth: int) -> tuple[Element, ...]:
+def _elements(raw: object, depth: int, budget: list[int], max_siblings: int) -> tuple[Element, ...]:
     if not isinstance(raw, list):
         return ()
     if depth > MAX_DEPTH:
         raise ValueError(f"template nests deeper than {MAX_DEPTH} levels")
-    return tuple(_element(item, depth) for item in raw if isinstance(item, dict))
+    items = [item for item in raw if isinstance(item, dict)]
+    if len(items) > max_siblings:
+        raise ValueError(f"template has more than {max_siblings} elements on one level")
+    budget[0] -= len(items)
+    if budget[0] < 0:
+        raise ValueError(f"template has more than {MAX_ELEMENTS} elements")
+    return tuple(_element(item, depth, budget) for item in items)
 
 
-def _element(raw: dict[str, Any], depth: int) -> Element:
+def _element(raw: dict[str, Any], depth: int, budget: list[int]) -> Element:
     model_type = text_of(raw, "modelType")
     children_key = _CHILDREN.get(model_type or "")
     id_short = text_of(raw, "idShort")
     semantic_id = first_key(raw)
+    if id_short is not None and len(id_short) > _MAX_ID_SHORT:
+        raise ValueError(f"template idShort longer than {_MAX_ID_SHORT} characters")
+    if semantic_id is not None and len(semantic_id) > _MAX_IDENTIFIER:
+        raise ValueError(f"template semanticId longer than {_MAX_IDENTIFIER} characters")
+    siblings = _MAX_ITEM_KINDS if model_type == "SubmodelElementList" else _MAX_SIBLINGS
+    children = _elements(raw.get(children_key), depth + 1, budget, siblings) if children_key else ()
     return Element(
         id_short=id_short,
         semantic_id=semantic_id,
         wildcard=_is_wildcard(id_short, semantic_id),
         model_type=model_type,
         value_type=text_of(raw, "valueType"),
-        children=_elements(raw.get(children_key), depth + 1) if children_key else (),
+        children=children,
         cardinality=_cardinality(raw.get("qualifiers")),
     )
 

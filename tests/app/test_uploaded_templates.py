@@ -46,10 +46,24 @@ class TestReadTemplates(unittest.TestCase):
         )
 
 
+class Deep:
+    """A parser for which every document nests too deeply."""
+
+    def parse(self, document: AasDocument) -> dict:
+        raise RecursionError("maximum recursion depth exceeded")
+
+
 class TestWithUploaded(unittest.TestCase):
+    def _source(self, base: object, *uploads: Upload, parser: object = None) -> WithUploaded:
+        return WithUploaded(
+            base,  # type: ignore[arg-type]
+            uploads,
+            ByName(),
+            parser or FakeParser({"mine.json": _MINE}),  # type: ignore[arg-type]
+        )
+
     def test_uploaded_templates_come_before_idta_ones(self) -> None:
-        uploaded = TemplateFile("mine.json", Tier.CUSTOM, _MINE)
-        catalogue = WithUploaded(FixedTemplates([_IDTA]), [uploaded], []).catalogue()
+        catalogue = self._source(FixedTemplates([_IDTA]), _TEMPLATE_UPLOAD).catalogue()
         found = catalogue.lookup(_SEMANTIC_ID)
         assert found is not None
         self.assertEqual((found.name, found.tier), ("mine.json", Tier.CUSTOM))
@@ -63,16 +77,27 @@ class TestWithUploaded(unittest.TestCase):
 
     def test_without_idta_templates_the_uploaded_ones_are_used_alone(self) -> None:
         down = FixedTemplates(ShownError("not available"))
-        uploaded = TemplateFile("mine.json", Tier.CUSTOM, _MINE)
-        catalogue = WithUploaded(down, [uploaded], []).catalogue()
+        catalogue = self._source(down, _TEMPLATE_UPLOAD).catalogue()
         self.assertEqual(len(catalogue), 1)
-        self.assertEqual(catalogue.problems[0].reason, "not available")
-        with self.assertRaises(ShownError):
-            WithUploaded(down, [], []).catalogue()
+        self.assertEqual(catalogue.unavailable, "not available")
+        self.assertEqual(catalogue.problems, [])
+
+    def test_unusable_uploads_stay_visible_without_idta_templates(self) -> None:
+        down = FixedTemplates(ShownError("not available"))
+        catalogue = self._source(down, Upload("broken.json", b"{")).catalogue()
+        self.assertEqual(len(catalogue), 0)
+        self.assertEqual([p.name for p in catalogue.problems], ["broken.json"])
+
+    def test_a_template_nested_too_deeply_is_a_problem_not_a_crash(self) -> None:
+        catalogue = self._source(None, _TEMPLATE_UPLOAD, parser=Deep()).catalogue()
+        self.assertEqual(
+            [(p.name, p.reason) for p in catalogue.problems], [("mine.json", "nested too deeply")]
+        )
 
     def test_no_uploads_keep_the_source(self) -> None:
         base = FixedTemplates([_IDTA])
         self.assertIs(with_uploaded(base, [], ByName(), FakeParser({})), base)
+        self.assertIs(with_uploaded(base, [_TEMPLATE_UPLOAD], None, FakeParser({})), base)
 
 
 class TestAnalysisWithUploadedTemplates(unittest.TestCase):
@@ -90,6 +115,7 @@ class TestAnalysisWithUploadedTemplates(unittest.TestCase):
             "0.1.0",
             graph_store=FakeStore(),
             parser=FakeParser({"a.json": {"submodels": []}, "mine.json": _MINE}),
+            template_reader=ByName(),
         )
         report = analyze.run(UPLOADS, AUTO, templates=[_TEMPLATE_UPLOAD])
         section = {s.key: s for s in report.sections}["templates"]

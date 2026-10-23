@@ -1,11 +1,13 @@
 """Compare a submodel with its template: which elements are missing, too many, mistyped."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
 from aaspect.domain.blocks import Severity
 from aaspect.domain.templates.elements import Cardinality, Element, id_short_matches
 from aaspect.domain.templates.matching import assign
+from aaspect.domain.templates.work import Work
 
 
 class DeviationKind(StrEnum):
@@ -43,21 +45,31 @@ class Deviation:
     actual: str
 
 
-def deviations(template: tuple[Element, ...], submodel: tuple[Element, ...]) -> list[Deviation]:
+def deviations(
+    template: tuple[Element, ...],
+    submodel: tuple[Element, ...],
+    expired: Callable[[], bool] = lambda: False,
+) -> list[Deviation]:
     """Elements are matched by semanticId, ignoring an IRDI's version, and by idShort
-    where the template gives no semanticId or several siblings share one."""
+    where the template gives no semanticId or several siblings share one. Raises
+    `TooMuchWork` once the comparison passes its bounds or `expired` turns true."""
     found: list[Deviation] = []
-    _compare_level(template, submodel, "", found)
+    _compare_level(template, submodel, "", found, Work(expired))
     return found
 
 
 def _compare_level(
-    expected: tuple[Element, ...], actual: tuple[Element, ...], path: str, found: list[Deviation]
+    expected: tuple[Element, ...],
+    actual: tuple[Element, ...],
+    path: str,
+    found: list[Deviation],
+    work: Work,
 ) -> None:
+    work.spend(len(expected) + len(actual))
     claimed: set[int] = set()
     alternatives = _alternatives(expected)
     counts: dict[str, int] = {}
-    for element, indexes in zip(expected, assign(expected, actual), strict=True):
+    for element, indexes in zip(expected, assign(expected, actual, work.spend), strict=True):
         claimed.update(indexes)
         here = _join(path, element.id_short)
         key = element.key
@@ -67,7 +79,7 @@ def _compare_level(
             _check_count(element, len(indexes), here, found)
         if not element.wildcard:
             for index in indexes:
-                _compare_element(element, actual[index], here, found)
+                _compare_element(element, actual[index], here, found, work)
     for key, group in alternatives.items():
         _check_count(group, counts.get(key, 0), _join(path, group.id_short), found)
     for index, candidate in enumerate(actual):
@@ -117,6 +129,7 @@ def _compare_element(
     candidate: Element,
     path: str,
     found: list[Deviation],
+    work: Work,
     in_list: bool = False,
 ) -> None:
     """`in_list` for the items of a SubmodelElementList, which carry no idShort."""
@@ -142,9 +155,9 @@ def _compare_element(
                 if shape is None:
                     found.append(_unexpected(item_path, item))
                 else:
-                    _compare_element(shape, item, item_path, found, in_list=True)
+                    _compare_element(shape, item, item_path, found, work, in_list=True)
     elif element.children:
-        _compare_level(element.children, candidate.children, path, found)
+        _compare_level(element.children, candidate.children, path, found, work)
 
 
 def _compare_names(
@@ -173,8 +186,10 @@ def _compare_names(
 
 def _item_template(shapes: tuple[Element, ...], item: Element) -> Element | None:
     """The template item a list item follows: one with its semanticId, where the template
-    names any; then one of its element type; among several, the one it deviates least
-    from. None for an item of a kind the template does not define."""
+    names any; then one of its element type; among several, the one sharing most child
+    semanticIds and idShorts with it, judged on that one level only, so that nested
+    alternatives cannot multiply the work. None for an item of a kind the template does
+    not define."""
     candidates = shapes
     if item.key is not None and any(shape.key is not None for shape in shapes):
         candidates = tuple(shape for shape in shapes if shape.key == item.key)
@@ -184,13 +199,10 @@ def _item_template(shapes: tuple[Element, ...], item: Element) -> Element | None
     candidates = typed or candidates
     if len(candidates) == 1:
         return candidates[0]
-    return min(candidates, key=lambda shape: _errors_against(shape, item))
-
-
-def _errors_against(shape: Element, item: Element) -> int:
-    trial: list[Deviation] = []
-    _compare_element(shape, item, "", trial, in_list=True)
-    return sum(1 for deviation in trial if SEVERITY[deviation.kind] is Severity.ERROR)
+    names = {child.key or child.id_short for child in item.children}
+    return max(
+        candidates, key=lambda shape: len(names & {c.key or c.id_short for c in shape.children})
+    )
 
 
 def _unexpected(path: str, candidate: Element) -> Deviation:

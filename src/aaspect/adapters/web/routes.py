@@ -31,7 +31,8 @@ class WebLimits:
     max_files: int
     max_concurrent_analyses: int
     max_stored_reports: int
-    templates: TemplateLimits = TemplateLimits(max_files=50, max_bytes=50 * 2**20)
+    # None where uploaded templates are not checked, i.e. without a graph database.
+    templates: TemplateLimits | None = None
 
 
 class Pages:
@@ -41,8 +42,9 @@ class Pages:
             "max_upload_mb": limits.max_upload_bytes // 2**20,
             "max_upload_bytes": limits.max_upload_bytes,
             "max_files": limits.max_files,
-            "max_template_files": limits.templates.max_files,
-            "max_template_mb": limits.templates.max_bytes // 2**20,
+            "templates": limits.templates is not None,
+            "max_template_files": limits.templates.max_files if limits.templates else 0,
+            "max_template_mb": limits.templates.max_bytes // 2**20 if limits.templates else 0,
         }
 
     def render(self, name: str, status: int = 200, **context: object) -> Response:

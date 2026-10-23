@@ -23,11 +23,13 @@
   </select>
   <p class="hint">XML files always use the version of their namespace.</p>
 
+  {% if templates %}
   <label for="templates">Own submodel templates (optional)</label>
   <input id="templates" type="file" name="templates" multiple accept=".aasx,.json,.xml">
   <p class="hint">AAS files holding submodel templates, up to {{ max_template_files }} files
     and {{ max_template_mb }} MB. A submodel is checked against your template where its
     semanticId names one, before the IDTA templates.</p>
+  {% endif %}
 
   <button type="submit">Analyze</button>
 </form>

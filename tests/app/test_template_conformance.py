@@ -1,5 +1,6 @@
 import unittest
 from collections.abc import Sequence
+from unittest import mock
 
 from aaspect.app import template_conformance
 from aaspect.app.import_corpus import ImportResult
@@ -7,9 +8,10 @@ from aaspect.app.template_conformance import check_templates, load_catalogue, or
 from aaspect.domain.blocks import Finding, Location, Table
 from aaspect.domain.id_collisions import Occurrence
 from aaspect.domain.report import SectionStatus, ShownError
-from aaspect.domain.templates.catalogue import Catalogue, TemplateFile, Tier
+from aaspect.domain.templates.catalogue import Catalogue, CatalogueProblem, TemplateFile, Tier
 from aaspect.domain.templates.elements import Element
 from aaspect.domain.templates.instances import SubmodelRef
+from aaspect.domain.templates.work import TooMuchWork
 from tests.app.graph_fakes import FixedSubmodels
 
 _TEMPLATE = {
@@ -105,6 +107,27 @@ class TestCheckTemplates(unittest.TestCase):
         self.assertEqual(graph.fetched, [["n2"]])
         notes = [block.rule_id for block in section.blocks if isinstance(block, Finding)]
         self.assertIn("template-too-large", notes)
+
+    def test_a_submodel_too_complex_to_compare_is_named(self) -> None:
+        graph = FixedSubmodels([SubmodelRef("n1", None, "urn:nameplate", elements=1)])
+        with mock.patch.object(template_conformance, "deviations", side_effect=TooMuchWork):
+            section = check_templates(load_catalogue(_SOURCE), graph, _IMPORTED)
+        notes = [block.rule_id for block in section.blocks if isinstance(block, Finding)]
+        self.assertIn("template-too-large", notes)
+
+    def test_an_empty_catalogue_still_names_its_problems(self) -> None:
+        catalogue = Catalogue([], problems=[CatalogueProblem("x.json", "no submodel")])
+        section = check_templates(catalogue, FixedSubmodels(), _IMPORTED)
+        self.assertEqual(section.status, SectionStatus.SKIPPED)
+        notes = [b.rule_id for b in section.blocks if isinstance(b, Finding)]
+        self.assertEqual(notes, ["template-left-out"])
+
+    def test_missing_idta_templates_are_a_warning(self) -> None:
+        files = [TemplateFile("mine", Tier.CUSTOM, _TEMPLATE)]
+        catalogue = Catalogue(files, unavailable="The IDTA templates are not available.")
+        section = check_templates(catalogue, FixedSubmodels(), _IMPORTED)
+        warning = next(b for b in section.blocks if isinstance(b, Finding))
+        self.assertEqual(warning.rule_id, "template-idta-unavailable")
 
     def test_without_templates_it_is_skipped(self) -> None:
         section = check_templates(load_catalogue(FixedTemplates([])), FixedSubmodels(), _IMPORTED)

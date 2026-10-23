@@ -57,7 +57,10 @@ class AnalyzeCorpus:
         graph_store: GraphStore | None = None,
         parser: EnvironmentParser | None = None,
         templates: TemplateSource | None = None,
+        template_reader: CorpusReader | None = None,
     ) -> None:
+        """`template_reader` reads templates uploaded with an analysis, within limits of
+        their own; without it, uploaded templates are ignored."""
         self._reader = reader
         self._validator = validator
         self._aaspect_version = aaspect_version
@@ -66,6 +69,7 @@ class AnalyzeCorpus:
         self._graph_store = graph_store
         self._parser = parser
         self._templates = templates
+        self._template_reader = template_reader
 
     def run(
         self,
@@ -87,7 +91,7 @@ class AnalyzeCorpus:
             return seconds_left() < 0
 
         files = tuple(upload.name for upload in uploads)
-        checks_templates = self._templates is not None or bool(templates)
+        checks_templates = self._templates is not None or bool(templates and self._template_reader)
         sections = {key: self._waiting(key, checks_templates) for key in _TITLES}
 
         def publish(key: str, section: Section) -> Report:
@@ -109,7 +113,7 @@ class AnalyzeCorpus:
             if schema.section.status is SectionStatus.FAILED
             else [(document.label, outcome.version) for document, outcome in schema.outcomes]
         )
-        source = with_uploaded(self._templates, templates, self._reader, self._parser)
+        source = with_uploaded(self._templates, templates, self._template_reader, self._parser)
         return self._graph_steps(corpus, version_choice, versions, seconds_left, publish, source)
 
     def _check_schema(

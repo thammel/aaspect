@@ -14,55 +14,60 @@ def read_templates(
     uploads: Sequence[Upload], reader: CorpusReader, parser: EnvironmentParser
 ) -> tuple[list[TemplateFile], list[CatalogueProblem]]:
     """Each AAS document in the uploads as a template file, and why the others are left
-    out. Read like the corpus, within the same limits, since they are as untrusted."""
+    out. They are as untrusted as the corpus and read the same way."""
     corpus = reader.read(uploads)
     files: list[TemplateFile] = []
     problems = [CatalogueProblem(failure.source, failure.reason) for failure in corpus.failures]
     for document in corpus.documents:
         try:
             environment = parser.parse(document)
-        except ValueError as error:
-            problems.append(CatalogueProblem(document.label, str(error)))
+        except (ValueError, RecursionError) as error:
+            reason = str(error) if isinstance(error, ValueError) else "nested too deeply"
+            problems.append(CatalogueProblem(document.label, reason))
             continue
         files.append(TemplateFile(document.label, Tier.CUSTOM, environment))
     return files, problems
 
 
 class WithUploaded:
-    """A `TemplateSource`: `base` extended by the uploaded templates. While the base has
-    none to give, the uploaded ones are used alone, and the report says why."""
+    """A `TemplateSource`: `base` extended by the templates uploaded with one analysis.
+    They are read when the catalogue is asked for, inside the step that reports a
+    failure, and only their compiled form is kept. While the base has none to give, the
+    uploaded ones are used alone, and the report says why."""
 
     def __init__(
         self,
         base: TemplateSource | None,
-        files: Sequence[TemplateFile],
-        problems: Sequence[CatalogueProblem],
+        uploads: Sequence[Upload],
+        reader: CorpusReader,
+        parser: EnvironmentParser,
     ) -> None:
         self._base = base
-        self._files = files
-        self._problems = problems
+        self._uploads = uploads
+        self._reader = reader
+        self._parser = parser
 
     def catalogue(self) -> Catalogue:
-        base = None
-        problems = list(self._problems)
+        files, problems = read_templates(self._uploads, self._reader, self._parser)
+        base = unavailable = None
         if self._base is not None:
             try:
                 base = self._base.catalogue()
             except ShownError as error:
-                if not self._files:
+                if not files and not problems:
                     raise
-                problems.append(CatalogueProblem("IDTA templates", str(error)))
-        return Catalogue(self._files, base=base, problems=problems)
+                unavailable = str(error)
+        return Catalogue(files, base=base, problems=problems, unavailable=unavailable)
 
 
 def with_uploaded(
     base: TemplateSource | None,
     uploads: Sequence[Upload],
-    reader: CorpusReader,
+    reader: CorpusReader | None,
     parser: EnvironmentParser | None,
 ) -> TemplateSource | None:
-    """The template source of one analysis: `base`, extended by its uploaded templates."""
-    if not uploads or parser is None:
+    """The template source of one analysis: `base`, extended by its uploaded templates.
+    `reader` is the one for templates, with a budget of their own."""
+    if not uploads or reader is None or parser is None:
         return base
-    files, problems = read_templates(uploads, reader, parser)
-    return WithUploaded(base, files, problems)
+    return WithUploaded(base, uploads, reader, parser)
