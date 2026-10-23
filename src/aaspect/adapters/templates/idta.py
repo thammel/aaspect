@@ -38,6 +38,7 @@ class IdtaTemplates:
         manifest: dict[str, Any] | None = None,
         retry_seconds: float = 300,
         workers: int = 8,
+        first_wait_seconds: float = 60,
     ) -> None:
         self._manifest = manifest or json.loads(
             resources.files(__package__).joinpath("manifest.json").read_text("utf-8")
@@ -45,6 +46,9 @@ class IdtaTemplates:
         self._download = download
         self._retry_seconds = retry_seconds
         self._workers = workers
+        self._first_wait = first_wait_seconds
+        # Set once a download has ended, however it ended.
+        self._first_done = threading.Event()
         self._lock = threading.Lock()
         self._catalogue: Catalogue | None = None
         self._loaded: dict[str, TemplateFile] = {}
@@ -53,6 +57,9 @@ class IdtaTemplates:
         threading.Thread(target=self._keep_trying, daemon=True).start()
 
     def catalogue(self) -> Catalogue:
+        """The templates; while the first download after start is still running, waits
+        for it at most `first_wait_seconds`, so that the first analysis gets them."""
+        self._first_done.wait(self._first_wait)
         with self._lock:
             if self._catalogue is None:
                 raise ShownError(_UNAVAILABLE)
@@ -70,12 +77,14 @@ class IdtaTemplates:
             catalogue = Catalogue(files)
         except Exception:  # Any failure leaves the templates unavailable until a retry.
             logger.warning("Downloading the IDTA submodel templates failed", exc_info=True)
+            self._first_done.set()
             return False
         finally:
             # The first failure decides; the files not yet fetched are not waited for.
             pool.shutdown(wait=False, cancel_futures=True)
         with self._lock:
             self._catalogue = catalogue
+        self._first_done.set()
         logger.info("Downloaded %d IDTA submodel templates", len(files))
         return True
 

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import threading
 import time
 import unittest
 
@@ -57,8 +58,20 @@ class TestIdtaTemplates(unittest.TestCase):
             ],
         )
 
+    def test_the_first_analysis_waits_for_the_first_download(self) -> None:
+        release = threading.Event()
+
+        def download(pinned: PinnedFile) -> bytes:
+            release.wait(5)
+            return _CONTENT
+
+        source = IdtaTemplates(download, _manifest())
+        source.start()
+        threading.Timer(0.1, release.set).start()
+        self.assertEqual(len(source.catalogue()), 1)
+
     def test_unavailable_until_loaded_without_waiting(self) -> None:
-        source = IdtaTemplates(lambda pinned: _CONTENT, _manifest())
+        source = IdtaTemplates(lambda pinned: _CONTENT, _manifest(), first_wait_seconds=0)
         with self.assertRaises(ShownError):
             source.catalogue()
 
@@ -66,7 +79,7 @@ class TestIdtaTemplates(unittest.TestCase):
         def download(pinned: PinnedFile) -> bytes:
             raise ValueError("content differs from the pinned version")
 
-        source = IdtaTemplates(download, _manifest())
+        source = IdtaTemplates(download, _manifest(), first_wait_seconds=0)
         with self.assertLogs("aaspect.adapters.templates.idta", "WARNING"):
             self.assertFalse(source.load())
         with self.assertRaises(ShownError):
