@@ -56,10 +56,11 @@ class IdtaTemplates:
     def start(self) -> None:
         threading.Thread(target=self._keep_trying, daemon=True).start()
 
-    def catalogue(self) -> Catalogue:
+    def catalogue(self, wait_seconds: float = 0) -> Catalogue:
         """The templates; while the first download after start is still running, waits
-        for it at most `first_wait_seconds`, so that the first analysis gets them."""
-        self._first_done.wait(self._first_wait)
+        for it, at most `wait_seconds` and `first_wait_seconds`, so that the first analysis
+        gets them."""
+        self._first_done.wait(max(0, min(wait_seconds, self._first_wait)))
         with self._lock:
             if self._catalogue is None:
                 raise ShownError(_UNAVAILABLE)
@@ -89,8 +90,12 @@ class IdtaTemplates:
         return True
 
     def _keep_trying(self) -> None:
-        while not self.load():
-            time.sleep(self._retry_seconds)
+        try:
+            while not self.load():
+                time.sleep(self._retry_seconds)
+        finally:
+            # Analyses must never wait for a download thread that has ended.
+            self._first_done.set()
 
     def _entries(self) -> list[dict[str, Any]]:
         return self._manifest["files"]

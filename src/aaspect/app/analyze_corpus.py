@@ -157,7 +157,9 @@ class AnalyzeCorpus:
             with self._graph_store.open(seconds_left()) as graph:
                 imported = import_corpus(corpus.documents, self._parser, graph, expired)
                 publish(_GRAPH, graph_import_section.import_section(imported))
-                steps = after_import(graph, imported, choice, versions, expired, templates)
+                steps = after_import(
+                    graph, imported, choice, versions, expired, templates, seconds_left()
+                )
                 for key, step in steps:
                     publish(key, _running(key))
                     report = publish(key, _guarded(key, step))

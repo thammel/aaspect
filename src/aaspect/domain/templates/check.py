@@ -151,7 +151,7 @@ def _compare_element(
         if element.children:
             for position, item in enumerate(candidate.children):
                 item_path = f"{path}[{position}]"
-                shape = _item_template(element.children, item)
+                shape = _item_template(element.children, item, work)
                 if shape is None:
                     found.append(_unexpected(item_path, item))
                 else:
@@ -184,7 +184,7 @@ def _compare_names(
         )
 
 
-def _item_template(shapes: tuple[Element, ...], item: Element) -> Element | None:
+def _item_template(shapes: tuple[Element, ...], item: Element, work: Work) -> Element | None:
     """The template item a list item follows: one with its semanticId, where the template
     names any; then one of its element type; among several, the one sharing most child
     semanticIds and idShorts with it, judged on that one level only, so that nested
@@ -199,6 +199,7 @@ def _item_template(shapes: tuple[Element, ...], item: Element) -> Element | None
     candidates = typed or candidates
     if len(candidates) == 1:
         return candidates[0]
+    work.spend(len(item.children) + sum(len(shape.children) for shape in candidates))
     names = {child.key or child.id_short for child in item.children}
     return max(
         candidates, key=lambda shape: len(names & {c.key or c.id_short for c in shape.children})

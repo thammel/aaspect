@@ -86,18 +86,27 @@ def _by_type(
 ) -> None:
     """Alternatives sharing a semanticId, such as Asset Interfaces Description's interface
     kinds, give their instances free names."""
-    for key in shared:
-        group = [p for p, e in enumerate(expected) if e.key == key and not e.wildcard]
+    groups: dict[str, list[int]] = {}
+    wildcard_types: dict[str, set[str | None]] = {}
+    for position, element in enumerate(expected):
+        if element.key is None or element.key not in shared:
+            continue
+        if element.wildcard:
+            wildcard_types.setdefault(element.key, set()).add(element.model_type)
+        else:
+            groups.setdefault(element.key, []).append(position)
+    for key, group in groups.items():
+        by_type: dict[str | None, int] = {}
+        for position in group:
+            by_type.setdefault(expected[position].model_type, position)
+        wild = wildcard_types.get(key, set())
         for index in by_key.get(key, ()):
             if index in owner:
                 continue
             kind = actual[index].model_type
-            same_type = [p for p in group if expected[p].model_type == kind]
-            if same_type:
-                owner[index] = same_type[0]
-            elif group and not any(
-                e.wildcard and e.key == key and e.model_type in (None, kind) for e in expected
-            ):
+            if kind in by_type:
+                owner[index] = by_type[kind]
+            elif None not in wild and kind not in wild:
                 owner[index] = group[0]
 
 

@@ -32,8 +32,8 @@ _CHILDREN = {
 # IDTA template has about 1,000 elements and a few dozen siblings per level.
 MAX_ELEMENTS = 5_000
 _MAX_SIBLINGS = 1_000
-# Alternatives a list item is scored against.
-_MAX_ITEM_KINDS = 16
+# Alternatives a list item is scored against; Factory Automation Data has 21.
+_MAX_ITEM_KINDS = 64
 # idShorts are at most 128 characters by the metamodel; identifiers get room to spare.
 _MAX_ID_SHORT = 128
 _MAX_IDENTIFIER = 2_048

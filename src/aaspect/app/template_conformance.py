@@ -26,10 +26,11 @@ _MAX_TEXT = 256
 _LISTED_PROBLEMS = 20
 
 
-def load_catalogue(source: TemplateSource) -> Catalogue | Exception:
-    """The catalogue, or why there is none: the check reports it, analytics goes without."""
+def load_catalogue(source: TemplateSource, wait_seconds: float = 0) -> Catalogue | Exception:
+    """The catalogue, or why there is none: the check reports it, analytics goes without.
+    `wait_seconds` is how long a download already running may still be waited for."""
     try:
-        return source.catalogue()
+        return source.catalogue(wait_seconds)
     except Exception as error:  # Raised again by the check, which reports it.
         return error
 

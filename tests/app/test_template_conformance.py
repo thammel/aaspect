@@ -41,7 +41,7 @@ class FixedTemplates:
     def __init__(self, files: Sequence[TemplateFile] | Exception) -> None:
         self.files = files
 
-    def catalogue(self) -> Catalogue:
+    def catalogue(self, wait_seconds: float = 0) -> Catalogue:
         if isinstance(self.files, Exception):
             raise self.files
         return Catalogue(self.files)

@@ -68,7 +68,7 @@ class TestIdtaTemplates(unittest.TestCase):
         source = IdtaTemplates(download, _manifest())
         source.start()
         threading.Timer(0.1, release.set).start()
-        self.assertEqual(len(source.catalogue()), 1)
+        self.assertEqual(len(source.catalogue(wait_seconds=5)), 1)
 
     def test_unavailable_until_loaded_without_waiting(self) -> None:
         source = IdtaTemplates(lambda pinned: _CONTENT, _manifest(), first_wait_seconds=0)

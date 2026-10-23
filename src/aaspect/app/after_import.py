@@ -20,15 +20,17 @@ def after_import(
     versions: list[tuple[str, MetamodelVersion | None]] | None,
     expired: Callable[[], bool],
     templates: TemplateSource | None,
+    seconds_left: float = 0,
 ) -> list[Step]:
     """(section key, step) pairs, cheapest first: the constraint check can take what is
     left of the time. Template conformance only with a template source; analytics then
-    names the templates submodels follow."""
+    names the templates submodels follow. `seconds_left` of the analysis bound the wait
+    for templates still being downloaded."""
     steps: list[Step] = []
     if templates is None:
         steps.append((analytics.SECTION_KEY, lambda: analytics.analyze(graph, imported, expired)))
     else:
-        catalogue = template_conformance.load_catalogue(templates)
+        catalogue = template_conformance.load_catalogue(templates, seconds_left)
         template_of = (
             (lambda _: None)
             if isinstance(catalogue, Exception)

@@ -47,12 +47,12 @@ class WithUploaded:
         self._reader = reader
         self._parser = parser
 
-    def catalogue(self) -> Catalogue:
+    def catalogue(self, wait_seconds: float = 0) -> Catalogue:
         files, problems = read_templates(self._uploads, self._reader, self._parser)
         base = unavailable = None
         if self._base is not None:
             try:
-                base = self._base.catalogue()
+                base = self._base.catalogue(wait_seconds)
             except ShownError as error:
                 if not files and not problems:
                     raise

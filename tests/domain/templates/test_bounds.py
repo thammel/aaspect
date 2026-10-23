@@ -29,7 +29,7 @@ class TestTemplateBounds(unittest.TestCase):
             [
                 {
                     "modelType": "SubmodelElementList",
-                    "value": [{"modelType": "Property"}] * 17,
+                    "value": [{"modelType": "Property"}] * 65,
                 }
             ],
         ]
