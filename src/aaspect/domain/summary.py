@@ -59,10 +59,18 @@ class Summary:
     top_rules: tuple[RuleTally, ...]
     # True only once every analysis has completed: a skipped or failed one proves nothing.
     complete: bool
+    # Error findings that name no uploaded file, e.g. a check that could not locate its
+    # violations: they count against the corpus, not against any one file.
+    unplaced: int = 0
 
     @property
     def passing(self) -> int:
         return self.files - len(self.failing)
+
+    @property
+    def clean(self) -> bool:
+        """No error anywhere, attributed to a file or not."""
+        return not self.failing and not self.unplaced
 
 
 def summarize(report: Report) -> Summary:
@@ -85,6 +93,7 @@ def summarize(report: Report) -> Summary:
         sections=sections,
         top_rules=tuple(rules[:_TOP_RULES]),
         complete=all(section.status is SectionStatus.COMPLETED for section in report.sections),
+        unplaced=tally.unplaced,
     )
 
 
@@ -94,6 +103,7 @@ class _Tally:
         self.errors: defaultdict[str, Counter[str]] = defaultdict(Counter)
         self.warnings: Counter[str] = Counter()
         self.rules: list[RuleTally] = []
+        self.unplaced = 0
 
     def add(self, section: Section) -> SectionTally:
         findings = [block for block in section.blocks if isinstance(block, Finding)]
@@ -118,6 +128,7 @@ class _Tally:
         if finding.severity is Severity.INFO:
             return
         if finding.severity is Severity.ERROR:
+            self.unplaced += not named
             for file, places in Counter(named).items():
                 self.errors[file][section] += places
         else:

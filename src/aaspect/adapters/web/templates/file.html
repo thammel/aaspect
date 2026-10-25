@@ -13,7 +13,7 @@
   <p class="sidebar-title">This file</p>
   <ul>
     {% for section in sections %}
-    <li><a class="hue-{{ loop.index0 % 6 + 1 }}" href="#section-{{ section.key }}"><span class="dot status-{{ section.status.value }}" aria-hidden="true"></span>{{ section.title }}{% if ns.errors[section.key] %}<span class="badge">{{ ns.errors[section.key] }}</span>{% endif %}</a></li>
+    <li><a class="hue-{{ loop.index0 % 6 + 1 }}" href="#section-{{ section.key }}"><span class="dot status-{{ section.status.value }}" aria-hidden="true"></span>{{ section.title }}{% if ns.errors[section.key] %}<span class="badge" title="{{ ns.errors[section.key] }} error location{{ "s" if ns.errors[section.key] != 1 }} in this file">{{ ns.errors[section.key] }}</span>{% endif %}</a></li>
     {% endfor %}
   </ul>
   {% include "nav_files.html" %}
@@ -26,8 +26,8 @@
     {% if index > 0 %}· <a href="/reports/{{ key }}/files/{{ index - 1 }}">previous</a>{% endif %}
     {% if index + 1 < report.files | length %}· <a href="/reports/{{ key }}/files/{{ index + 1 }}">next</a>{% endif %}</p>
   <h1 class="file-name">{{ file }}</h1>
-  <p class="meta">{% if ns.total %}{{ ns.total }} error location{{ "s" if ns.total != 1 }}{% elif report.finished %}No errors found in this file{% else %}No errors found so far{% endif %}
-    {% if not report.finished %} · the analysis is still running{% endif %}</p>
+  <p class="meta">{% if ns.total %}{{ ns.total }} error location{{ "s" if ns.total != 1 }}{% elif report.finished and summary.complete %}No errors listed for this file{% else %}No errors listed for this file so far{% endif %}
+    {% if not report.finished %} · the analysis is still running{% elif not summary.complete %} · not every analysis completed{% endif %}</p>
   {% if ns.total %}
   <p class="pills">{% for section in sections %}{% if ns.errors[section.key] %}<span class="pill hue-{{ loop.index0 % 6 + 1 }}">{{ section.title }} <b>{{ ns.errors[section.key] }}</b></span>{% endif %}{% endfor %}</p>
   {% endif %}

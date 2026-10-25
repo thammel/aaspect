@@ -10,7 +10,7 @@
   <ul>
     <li><a href="#summary"><span class="dot status-completed" aria-hidden="true"></span>Summary</a></li>
     {% for section in report.sections %}
-    <li><a class="hue-{{ loop.index0 % 6 + 1 }}" href="#section-{{ section.key }}"><span class="dot status-{{ section.status.value }}" aria-hidden="true"></span>{{ section.title }}{% set errors = section.blocks | select("finding") | selectattr("severity.value", "equalto", "error") | list | length %}{% if errors %}<span class="badge">{{ errors }}</span>{% endif %}</a></li>
+    <li><a class="hue-{{ loop.index0 % 6 + 1 }}" href="#section-{{ section.key }}"><span class="dot status-{{ section.status.value }}" aria-hidden="true"></span>{{ section.title }}{% set errors = section.blocks | select("finding") | selectattr("severity.value", "equalto", "error") | list | length %}{% if errors %}<span class="badge" title="{{ errors }} error finding{{ "s" if errors != 1 }}">{{ errors }}</span>{% endif %}</a></li>
     {% endfor %}
   </ul>
   {% include "nav_files.html" %}

@@ -4,12 +4,13 @@
 {% for tally in summary.sections %}{% set _ = hue.of.update({tally.title: loop.index0 % 6 + 1}) %}{% endfor %}
 <section class="panel summary" id="summary" aria-label="Summary">
   <div class="verdict">
-    <div class="ring {{ "ring-pending" if not (report.finished and summary.complete) else ("ring-fail" if failing else "ring-pass") }}">
+    <div class="ring {{ "ring-pending" if not (report.finished and summary.complete) else ("ring-pass" if summary.clean else "ring-fail") }}">
       <span class="ring-number">{{ summary.passing }}</span><span class="ring-of">of {{ summary.files }} pass</span>
     </div>
     <div>
-      <h2>{% if failing %}{{ failing }} file{{ "s" if failing != 1 }} with errors{% elif report.finished and summary.complete %}No errors found{% else %}No errors found so far{% endif %}</h2>
+      <h2>{% if failing %}{{ failing }} file{{ "s" if failing != 1 }} with errors{% elif summary.unplaced %}Errors found{% elif report.finished and summary.complete %}No errors found{% else %}No errors found so far{% endif %}</h2>
       <p class="meta">{{ summary.passing }} of {{ summary.files }} uploaded file{{ "s" if summary.files != 1 }} passed every analysis that ran.</p>
+      {% if summary.unplaced %}<p class="unplaced">{{ summary.unplaced }} error finding{{ "s" if summary.unplaced != 1 }} name{{ "s" if summary.unplaced == 1 }} no file and count against the whole corpus; see the analyses below.</p>{% endif %}
       {% if not report.finished %}
       <p class="hint">Preliminary: not every analysis has finished.</p>
       {% elif not summary.complete %}
@@ -18,7 +19,7 @@
     </div>
   </div>
 
-  <div class="scorecard">
+  <div class="scorecard" title="Counts of findings: one finding groups every place where one rule fails">
     {% for tally in summary.sections %}
     <a class="score hue-{{ hue.of[tally.title] }}" href="#section-{{ tally.key }}">
       <span class="score-title"><span class="dot status-{{ tally.status.value }}" aria-hidden="true"></span>{{ tally.title }}</span>

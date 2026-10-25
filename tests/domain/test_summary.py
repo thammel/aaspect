@@ -79,6 +79,34 @@ class TestSummarize(unittest.TestCase):
         summary = summarize(_report(section, files=("e.aasx",)))
         self.assertEqual([issues.file for issues in summary.failing], ["e.aasx"])
 
+    def test_errors_naming_no_file_keep_the_corpus_from_passing(self) -> None:
+        section = Section(
+            "constraints",
+            "Constraints",
+            SectionStatus.COMPLETED,
+            (
+                Finding("AASd-002", Severity.ERROR, "m"),
+                Finding("AASd-005", Severity.ERROR, "m", _at(None)),
+                Finding("AASd-021", Severity.ERROR, "m", _at(None, "a.json")),
+            ),
+        )
+        summary = summarize(_report(section))
+        self.assertEqual(summary.unplaced, 2)
+        self.assertEqual([issues.file for issues in summary.failing], ["a.json"])
+        self.assertFalse(summary.clean)
+        self.assertFalse(
+            summarize(
+                _report(
+                    Section(
+                        "constraints",
+                        "C",
+                        SectionStatus.COMPLETED,
+                        (Finding("x", Severity.ERROR, "m"),),
+                    )
+                )
+            ).clean
+        )
+
     def test_an_unfinished_analysis_leaves_the_summary_incomplete(self) -> None:
         summary = summarize(
             _report(
