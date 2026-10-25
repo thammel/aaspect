@@ -7,8 +7,10 @@ const SHOWN_ROWS = 10;
 
 function collapse(container) {
   const rows = Array.from(container.querySelectorAll(":scope > tr, :scope > li"));
-  if (rows.length <= SHOWN_ROWS + 2) return;
-  const extra = rows.slice(SHOWN_ROWS);
+  // data-collapse="50" keeps more rows open where a page is about the list itself.
+  const shown = Number.parseInt(container.dataset.collapse, 10) || SHOWN_ROWS;
+  if (rows.length <= shown + 2) return;
+  const extra = rows.slice(shown);
   for (const row of extra) {
     row.classList.add("extra");
     row.hidden = true;
@@ -20,7 +22,7 @@ function collapse(container) {
   button.addEventListener("click", () => {
     const hide = !extra[0].hidden;
     for (const row of extra) row.hidden = hide;
-    button.textContent = hide ? `Show all ${rows.length} rows` : `Show the first ${SHOWN_ROWS} only`;
+    button.textContent = hide ? `Show all ${rows.length} rows` : `Show the first ${shown} only`;
   });
   const anchor = container.closest(".table-wrap") || container;
   anchor.after(button);

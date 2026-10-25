@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from aaspect.domain.blocks import Block, Finding, Severity, Table
+from aaspect.domain.per_file import Owners
 
 _RANK = {Severity.ERROR: 0, Severity.WARNING: 1, Severity.INFO: 2}
 # Analytics distributions end with this column; they read better as bars than as rows.
@@ -88,3 +89,15 @@ def _is_matrix(table: Table) -> bool:
 def number(value: object) -> object:
     """Whole numbers with thousands separators; anything else as it is."""
     return f"{value:,}" if isinstance(value, int) and not isinstance(value, bool) else value
+
+
+class FileLinks:
+    """Which upload a document label or file cell lies in, by its position, for links."""
+
+    def __init__(self, files: tuple[str, ...]) -> None:
+        self._owners = Owners(files)
+        self._index = {file: index for index, file in reversed(list(enumerate(files)))}
+
+    def index(self, label: object) -> int | None:
+        owner = self._owners.of(label) if isinstance(label, str) else None
+        return None if owner is None else self._index[owner]

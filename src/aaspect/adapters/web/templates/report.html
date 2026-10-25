@@ -4,7 +4,7 @@
 <script src="/static/tables.js" defer></script>{% endblock %}
 {% block layout %}dashboard{% endblock %}
 {% block content %}
-{% import "blocks.html" as blocks %}
+{% import "blocks.html" as blocks with context %}
 <aside class="sidebar">
   <p class="sidebar-title">Report</p>
   <ul>
@@ -13,6 +13,7 @@
     <li><a class="hue-{{ loop.index0 % 6 + 1 }}" href="#section-{{ section.key }}"><span class="dot status-{{ section.status.value }}" aria-hidden="true"></span>{{ section.title }}{% set errors = section.blocks | select("finding") | selectattr("severity.value", "equalto", "error") | list | length %}{% if errors %}<span class="badge">{{ errors }}</span>{% endif %}</a></li>
     {% endfor %}
   </ul>
+  {% include "nav_files.html" %}
   <a class="download" href="/reports/{{ key }}/report.json">Download JSON</a>
 </aside>
 

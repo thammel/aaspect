@@ -112,7 +112,7 @@
   <thead><tr>{% for column in columns %}<th{% if shown and shown[0][loop.index0] is number %} class="number"{% endif %}>{{ column }}</th>{% endfor %}</tr></thead>
   <tbody data-collapse>
     {% for row in shown %}
-    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{{ cell | number }}{{ help(cell) }}</td>{% endfor %}</tr>
+    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{% if loop.first %}{{ file_link(cell) }}{% else %}{{ cell | number }}{% endif %}{{ help(cell) }}</td>{% endfor %}</tr>
     {% endfor %}
   </tbody>
 </table>
@@ -176,7 +176,7 @@
   <thead><tr><th>File</th><th>Identifiable</th><th>Element</th></tr></thead>
   <tbody>
     {% for location in finding.locations[:max_locations] %}
-    <tr><td>{{ location.file or "–" }}</td><td>{{ location.identifiable_id or "–" }}</td><td><code>{{ location.element_path or "–" }}</code></td></tr>
+    <tr><td>{{ file_link(location.file) if location.file else "–" }}</td><td>{{ location.identifiable_id or "–" }}</td><td><code>{{ location.element_path or "–" }}</code></td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -190,3 +190,6 @@
 {# A "?" beside a metamodel constraint id that shows what the constraint asks for on hover
    or keyboard focus. #}
 {% macro help(cell) %}{% set text = cell | explain %}{% if text %}<span class="help" tabindex="0" aria-label="What {{ cell }} means: {{ text }}">?<span class="help-text" role="tooltip">{{ text }}</span></span>{% endif %}{% endmacro %}
+
+{# A value naming an upload links to that file's page; anything else shows as it is. #}
+{% macro file_link(value) %}{% set index = links.index(value) if links is defined else none %}{% if index is not none %}<a class="file-link" href="/reports/{{ key }}/files/{{ index }}">{{ value }}</a>{% else %}{{ value | number }}{% endif %}{% endmacro %}

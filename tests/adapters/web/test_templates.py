@@ -72,7 +72,8 @@ class TestTemplates(unittest.TestCase):
         self.assertIn("2 files with errors", html)
         self.assertRegex(
             html,
-            r'<td class="file">a.json</td>\s*<td><span class="pills">'
+            r'<td class="file"><a href="/reports/k/files/0">a.json</a></td>\s*'
+            r'<td><span class="pills">'
             r'<span class="pill hue-1">Schema',
         )
         self.assertIn("Not every analysis completed", html)
@@ -112,6 +113,10 @@ class TestTemplates(unittest.TestCase):
     def test_every_section_folds_and_starts_open(self) -> None:
         html = _report_html(full_report())
         self.assertEqual(html.count("<details open data-section="), len(full_report().sections))
+
+    def test_files_by_outcome_wait_for_the_whole_analysis(self) -> None:
+        self.assertNotIn("files?show=errors", _report_html(running_report()))
+        self.assertIn("files?show=errors", _report_html(full_report()))
 
     def test_running_report_says_so_and_finished_one_does_not(self) -> None:
         self.assertIn('data-finished="false"', _report_html(running_report()))

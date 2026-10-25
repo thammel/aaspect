@@ -83,6 +83,57 @@ class TestRoutes(unittest.TestCase):
         self.assertIn("attachment", download.headers["content-disposition"])
         self.assertEqual(json.loads(download.content)["format_version"], "2")
 
+    def test_each_file_has_its_own_page(self) -> None:
+        location = self._upload(_files("a.json")).headers["location"]
+        self.assertIn(f'href="{location}/files/0"', self.client.get(location).text)
+        page = self.client.get(location + "/files/0")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('<h1 class="file-name">a.json</h1>', page.text)
+        escaped = self.client.get(location + "/files/1")
+        self.assertNotIn(XSS, escaped.text)
+        self.assertIn("&lt;script&gt;", escaped.text)
+        for index in ("2", "-1", "x"):
+            with self.subTest(index):
+                self.assertIn(self.client.get(f"{location}/files/{index}").status_code, (404, 422))
+
+    def test_file_list_filters_by_errors_and_name(self) -> None:
+        location = self._upload(_files("a.json")).headers["location"]
+        everything = self.client.get(location + "/files")
+        self.assertEqual(everything.status_code, 200)
+        self.assertIn(f'<a href="{location}/files/0">a.json</a>', everything.text)
+        self.assertNotIn(XSS, everything.text)
+        clean = self.client.get(location + "/files", params={"show": "clean"}).text
+        self.assertIn("No file matches.", clean)
+        named = self.client.get(location + "/files", params={"q": "A.JS", "show": "nope"}).text
+        self.assertIn("1 file shown matching", named)
+        self.assertIn('value="all" checked', named)
+
+    def test_go_to_file_by_exact_or_unique_name(self) -> None:
+        location = self._upload(_files("a.json")).headers["location"]
+
+        def target(name: str) -> str:
+            response = self.client.get(
+                location + "/goto", params={"name": name}, follow_redirects=False
+            )
+            self.assertEqual(response.status_code, 303)
+            return response.headers["location"]
+
+        self.assertEqual(target("a.json"), f"{location}/files/0")
+        self.assertEqual(target("a.js"), f"{location}/files/0")
+        self.assertEqual(target("<"), f"{location}/files/1")
+        self.assertEqual(target("nothing"), f"{location}/files?q=nothing")
+        self.assertEqual(target("a b&c"), f"{location}/files?q=a+b%26c")
+
+    def test_report_links_and_offers_every_file(self) -> None:
+        location = self._upload(_files("a.json")).headers["location"]
+        page = self.client.get(location).text
+        self.assertIn(f'action="{location}/goto"', page)
+        self.assertIn('<option value="a.json"></option>', page)
+        self.assertIn(f'href="{location}/files?show=errors"', page)
+        self.assertIn(f'href="{location}/files?show=clean"', page)
+        self.assertIn('<option value="&lt;script&gt;', page)
+        self.assertIn(f'<a class="file-link" href="{location}/files/0">a.json</a>', page)
+
     def test_named_empty_file_reaches_the_analysis(self) -> None:
         self._upload(_files("empty.json", content=b"") + _files("", content=b""))
         self.assertEqual(self.analyze.calls, [(["empty.json"], AutoOrder.OLDEST_FIRST)])
@@ -153,7 +204,7 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 413)
 
     def test_unknown_report(self) -> None:
-        for path in ("/reports/nope", "/reports/nope/report.json"):
+        for path in ("/reports/nope", "/reports/nope/report.json", "/reports/nope/files/0"):
             with self.subTest(path):
                 self.assertEqual(self.client.get(path).status_code, 404)
 

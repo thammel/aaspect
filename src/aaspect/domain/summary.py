@@ -8,7 +8,8 @@ of an object shared by many, makes them lower bounds.
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-from aaspect.domain.blocks import Finding, Location, Severity
+from aaspect.domain.blocks import Finding, Severity
+from aaspect.domain.per_file import Owners
 from aaspect.domain.report import Report, Section, SectionStatus
 
 _TOP_RULES = 6
@@ -16,9 +17,11 @@ _TOP_RULES = 6
 
 @dataclass(frozen=True, slots=True)
 class FileIssues:
-    """One uploaded file with errors. `errors` holds (section title, error places)."""
+    """One uploaded file with errors. `errors` holds (section title, error places);
+    `index` is the file's position among the uploads, which names it in links."""
 
     file: str
+    index: int
     errors: tuple[tuple[str, int], ...]
     warnings: int
 
@@ -63,11 +66,12 @@ class Summary:
 
 
 def summarize(report: Report) -> Summary:
-    tally = _Tally(_Owners(report.files))
+    tally = _Tally(Owners(report.files))
+    positions = {file: index for index, file in reversed(list(enumerate(report.files)))}
     sections = tuple(tally.add(section) for section in report.sections)
     failing = sorted(
         (
-            FileIssues(file, tuple(by_section.items()), tally.warnings[file])
+            FileIssues(file, positions[file], tuple(by_section.items()), tally.warnings[file])
             for file, by_section in tally.errors.items()
         ),
         key=lambda issues: (-issues.total, issues.file),
@@ -85,7 +89,7 @@ def summarize(report: Report) -> Summary:
 
 
 class _Tally:
-    def __init__(self, owners: "_Owners") -> None:
+    def __init__(self, owners: Owners) -> None:
         self._owners = owners
         self.errors: defaultdict[str, Counter[str]] = defaultdict(Counter)
         self.warnings: Counter[str] = Counter()
@@ -108,7 +112,7 @@ class _Tally:
     def _add_finding(self, section: str, finding: Finding) -> None:
         named = [
             file
-            for file in (self._owners.of(location) for location in finding.locations)
+            for file in (self._owners.of(location.file) for location in finding.locations)
             if file is not None
         ]
         if finding.severity is Severity.INFO:
@@ -128,25 +132,3 @@ class _Tally:
                 len(set(named)),
             )
         )
-
-
-class _Owners:
-    """Maps a location to the uploaded file it lies in. A document inside an AASX package
-    is labelled `package:part`."""
-
-    def __init__(self, files: tuple[str, ...]) -> None:
-        self._files = set(files)
-
-    def of(self, location: Location) -> str | None:
-        label = location.file
-        if label is None:
-            return None
-        if label in self._files:
-            return label
-        # An upload's own name may hold a colon too, so every split point is tried.
-        start = label.find(":")
-        while start != -1:
-            if label[:start] in self._files:
-                return label[:start]
-            start = label.find(":", start + 1)
-        return None

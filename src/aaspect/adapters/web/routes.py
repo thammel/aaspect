@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 import jinja2
 from fastapi import APIRouter, Request
@@ -13,6 +14,8 @@ from aaspect.adapters.web.uploads import (
     UploadRejected,
     read_form,
 )
+from aaspect.adapters.web.views import FileLinks
+from aaspect.domain.per_file import file_sections
 from aaspect.domain.report import Report
 from aaspect.domain.summary import summarize
 from aaspect.ports.report_writer import ReportWriter
@@ -21,6 +24,10 @@ from aaspect.ports.report_writer import ReportWriter
 _MAX_ROWS = 200
 _MAX_LOCATIONS = 20
 _EXPIRED = "This report does not exist or has expired."
+_NO_FILE = "This report has no such file."
+_SHOW = ("all", "errors", "clean")
+# Names are capped on upload too; a longer query cannot match anything.
+_MAX_QUERY = 300
 _BUSY = "AASpect is busy with other analyses. Please try again in a moment."
 # Long enough for the first state of any analysis; reading the uploads comes after it.
 _START_TIMEOUT_SECONDS = 10
@@ -62,6 +69,9 @@ def router(analyze: Analyze, writer: ReportWriter, pages: Pages, limits: WebLimi
     routes.add_api_route("/", handlers.upload_form, methods=["GET"])
     routes.add_api_route("/analyses", handlers.start_analysis, methods=["POST"])
     routes.add_api_route("/reports/{key}", handlers.show_report, methods=["GET"])
+    routes.add_api_route("/reports/{key}/files", handlers.list_files, methods=["GET"])
+    routes.add_api_route("/reports/{key}/files/{index}", handlers.show_file, methods=["GET"])
+    routes.add_api_route("/reports/{key}/goto", handlers.go_to_file, methods=["GET"])
     routes.add_api_route("/reports/{key}/report.json", handlers.download, methods=["GET"])
     routes.add_api_route("/reports/{key}/status", handlers.status, methods=["GET"])
     return routes
@@ -107,12 +117,72 @@ class _Handlers:
         report = self._store.get(key)
         if report is None:
             return self._pages.error(404, _EXPIRED)
-        return self._pages.render(
+        return self._render(
+            report,
+            key,
             "report.html",
-            report=report,
             summary=summarize(report),
-            key=key,
             state=_state(report),
+            max_rows=_MAX_ROWS,
+            max_locations=_MAX_LOCATIONS,
+        )
+
+    def list_files(self, key: str, show: str = "all", q: str = "") -> Response:
+        """Every upload, the most errors first; `show` and `q` narrow the list."""
+        report = self._store.get(key)
+        if report is None:
+            return self._pages.error(404, _EXPIRED)
+        show = show if show in _SHOW else "all"
+        query = q[:_MAX_QUERY]
+        summary = summarize(report)
+        failing = {issues.file: issues for issues in summary.failing}
+        rows = [
+            (index, file, failing.get(file))
+            for index, file in enumerate(report.files)
+            if query.lower() in file.lower()
+            and (show == "all" or (show == "errors") == (file in failing))
+        ]
+        rows.sort(key=lambda row: (-(row[2].total if row[2] else 0), row[1]))
+        return self._render(
+            report, key, "files.html", summary=summary, rows=rows, show=show, query=query
+        )
+
+    def go_to_file(self, key: str, name: str = "") -> Response:
+        """The file named exactly, else the only one whose name holds `name`, else the file
+        list filtered by it."""
+        report = self._store.get(key)
+        if report is None:
+            return self._pages.error(404, _EXPIRED)
+        name = name[:_MAX_QUERY].strip()
+        if name in report.files:
+            return RedirectResponse(f"/reports/{key}/files/{report.files.index(name)}", 303)
+        hits = [i for i, file in enumerate(report.files) if name and name.lower() in file.lower()]
+        if len(hits) == 1:
+            return RedirectResponse(f"/reports/{key}/files/{hits[0]}", 303)
+        return RedirectResponse(f"/reports/{key}/files?{urlencode({'q': name})}", 303)
+
+    def _render(self, report: Report, key: str, template: str, **context: object) -> Response:
+        """Pages of one report: their side bar offers every file, and file names link."""
+        context.setdefault("summary", summarize(report))
+        return self._pages.render(
+            template, 200, report=report, key=key, links=FileLinks(report.files), **context
+        )
+
+    def show_file(self, key: str, index: int) -> Response:
+        """One upload's share of the report. Files are named by position: their names come
+        from the uploads and do not belong in a path."""
+        report = self._store.get(key)
+        if report is None:
+            return self._pages.error(404, _EXPIRED)
+        if not 0 <= index < len(report.files):
+            return self._pages.error(404, _NO_FILE)
+        return self._render(
+            report,
+            key,
+            "file.html",
+            index=index,
+            file=report.files[index],
+            sections=file_sections(report, report.files[index]),
             max_rows=_MAX_ROWS,
             max_locations=_MAX_LOCATIONS,
         )

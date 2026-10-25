@@ -362,3 +362,32 @@ table.matrix td.number { width: 7rem; }
 .heat-2 { background: color-mix(in srgb, var(--error) 22%, transparent); }
 .heat-3 { background: color-mix(in srgb, var(--error) 38%, transparent); }
 .heat-4 { background: color-mix(in srgb, var(--error) 58%, transparent); color: var(--text); font-weight: 700; }
+
+/* File page */
+.file-name { font-size: 1.25rem; overflow-wrap: anywhere; margin: 0.2rem 0; }
+.file-head .pills { margin: 0.5rem 0 0; }
+.section-head { display: flex; justify-content: space-between; align-items: center; }
+.section-head h2 { margin: 0; font-size: 1.1rem; }
+section.section[class*="hue-"] > .section-head h2 { color: var(--hue); }
+table.files td.file a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted); }
+table.files td.file a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Files: the sidebar part, the list page and links to file pages. */
+.count-badge { margin-left: auto; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.goto { display: grid; gap: 0.3rem; margin: 0 0 1.5rem; }
+.goto label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 400; }
+.goto-row { display: flex; gap: 0.3rem; }
+.goto input { flex: 1; width: 0; min-width: 0; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); color: var(--text); font: inherit; font-size: 0.85rem; }
+.goto input:focus { border-color: var(--accent); outline: none; }
+.goto button { flex: none; padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+.file-filter { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.75rem; }
+.file-filter input[type="search"] { flex: 1 1 14rem; }
+.file-filter button { padding: 0.45rem 1rem; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg label { padding: 0.4rem 0.8rem; cursor: pointer; font-weight: 500; font-size: 0.85rem; }
+.seg label.on, .seg label:has(input:checked) { background: var(--accent); color: var(--on-accent); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.ok-text { color: var(--ok); font-size: 0.82rem; }
+a.file-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted); }
+a.file-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.sidebar li a.sub { padding-left: 1.4rem; font-size: 0.85rem; }
