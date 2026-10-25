@@ -51,6 +51,13 @@ class TestViews(unittest.TestCase):
                 "filled",
             ),
             (Table("t", ("File", "Version"), (("a", "3.0"), ("b", "3.1"))), "table"),
+            (
+                Table(
+                    "t", ("Template", "Source", "Submodels", "Conformant"), (("n", "s", 2, 1),) * 2
+                ),
+                "scoreboard",
+            ),
+            (Table("t", ("Template", "A", "B", "C"), (("n", 1, 0, 3), ("m", 0, 2, 0))), "matrix"),
         ]
         for table, kind in cases:
             with self.subTest(table.columns):

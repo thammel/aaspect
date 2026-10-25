@@ -18,6 +18,10 @@
   <div class="figure"><dt>{{ row[0] }}{{ help(row[0]) }}</dt><dd>{{ row[1] | number }}</dd></div>
   {% endfor %}
 </dl>
+{% elif kind == "scoreboard" %}
+{{ scoreboard(block) }}
+{% elif kind == "matrix" %}
+{{ matrix(block) }}
 {% elif kind == "stack" %}
 {{ stack(block) }}
 {% elif kind == "filled" %}
@@ -46,6 +50,39 @@
   <li><span class="swatch seg-{{ loop.index }}" aria-hidden="true"></span><span class="bar-label"><span class="bar-name" title="{{ row[0] }}">{{ row[0] }}</span>{% for cell in row[1:-2] %}<span class="tag">{{ cell }}</span>{% endfor %}</span><span class="bar-value">{{ row[-2] | number }} <span class="bar-meta">{{ row[-1] }} %</span></span></li>
   {% endfor %}
 </ul>
+{% endmacro %}
+
+{# Conformant against failing submodels per template, with its source and counts as tags. #}
+{% macro scoreboard(block) %}
+{% set c = block.columns %}
+{% set total, good = c.index("Submodels"), c.index("Conformant") %}
+<ul class="scoreboard" data-collapse>
+  {% for row in block.rows %}
+  <li>
+    <span class="bar-label"><span class="bar-name" title="{{ row[0] }}">{{ row[0] }}</span>{% for cell in row[1:] if cell is string %}<span class="tag">{{ cell }}</span>{% endfor %}</span>
+    <meter class="conformance" min="0" max="{{ row[total] or 1 }}" low="{{ row[total] }}" value="{{ row[good] }}" title="{{ row[good] }} of {{ row[total] }} conformant"></meter>
+    <span class="bar-value">{{ row[good] | number }} <span class="bar-meta">of {{ row[total] | number }}</span></span>
+    {% set counts = namespace(parts=[]) %}
+    {% for i in range(c | length) if c[i] not in ("Submodels", "Conformant") and row[i] is number %}{% set counts.parts = counts.parts + [(c[i], row[i])] %}{% endfor %}
+    <span class="score-counts">{% for column, value in counts.parts %}{{ column | lower }} <b>{{ value | number }}</b>{{ " · " if not loop.last }}{% endfor %}</span>
+  </li>
+  {% endfor %}
+</ul>
+<p class="hint"><span class="key-good" aria-hidden="true"></span> conformant <span class="key-bad" aria-hidden="true"></span> with errors</p>
+{% endmacro %}
+
+{# Whole-number counts as heat: one step per order of magnitude, so a few hundred and a few thousand still tell apart. #}
+{% macro matrix(block) %}
+<div class="table-wrap">
+<table class="matrix">
+  <thead><tr>{% for column in block.columns %}<th{% if not loop.first %} class="number"{% endif %}>{{ column }}</th>{% endfor %}</tr></thead>
+  <tbody data-collapse>
+    {% for row in block.rows %}
+    <tr><td class="name" title="{{ row[0] }}">{{ row[0] }}</td>{% for cell in row[1:] %}<td class="number heat-{{ 0 if not cell else (1 if cell < 10 else (2 if cell < 100 else (3 if cell < 1000 else 4))) }}">{{ (cell | number) if cell else "" }}</td>{% endfor %}</tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
 {% endmacro %}
 
 {# Coverage of optional attributes, grouped by the object that has them. #}

@@ -101,6 +101,14 @@ class TestTemplates(unittest.TestCase):
         self.assertIn('aria-label="What AASd-002 means: ', html)
         self.assertIn('<p class="explanation"><b>AASd-002:</b>', html)
 
+    def test_scoreboard_lists_the_other_counts_of_each_row(self) -> None:
+        columns = ("Template", "Source", "Submodels", "Conformant", "Errors", "Notes")
+        table = Table("Per template", columns, (("Nameplate", "IDTA", 4, 1, 7, 2),) * 2)
+        section = Section("templates", "Templates", SectionStatus.COMPLETED, (table,))
+        html = _report_html(Report("0.1.0", ("a.json",), (section,)))
+        self.assertIn('<span class="score-counts">errors <b>7</b> · notes <b>2</b></span>', html)
+        self.assertIn('<span class="tag">IDTA</span>', html)
+
     def test_every_section_folds_and_starts_open(self) -> None:
         html = _report_html(full_report())
         self.assertEqual(html.count("<details open data-section="), len(full_report().sections))

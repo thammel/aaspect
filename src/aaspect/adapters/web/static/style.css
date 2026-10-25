@@ -343,3 +343,22 @@ svg.stack { display: block; width: 100%; height: 1.1rem; border-radius: 6px; ove
 /* A scrolling table would clip the note; while one is shown the table lets it overflow. */
 .table-wrap:has(.help:hover), .table-wrap:has(.help:focus) { overflow: visible; }
 .explanation { margin: 0.6rem 0.9rem 0; padding: 0.5rem 0.7rem; border-left: 3px solid var(--accent); background: var(--info-soft); font-size: 0.86rem; border-radius: 0 6px 6px 0; }
+
+/* Scoreboard: conformant share per template, failures in the error colour behind it. */
+.scoreboard { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.15rem; font-size: 0.9rem; }
+.scoreboard li { display: grid; grid-template-columns: minmax(0, 5fr) minmax(6rem, 3fr) 6.5rem; gap: 0.1rem 0.75rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+.score-counts { grid-column: 1 / -1; color: var(--muted); font-size: 0.78rem; }
+.score-counts b { color: var(--text); font-weight: 600; }
+meter.conformance, meter.conformance::-webkit-meter-bar { background: var(--error-soft); }
+meter.conformance::-webkit-meter-optimum-value, meter.conformance::-webkit-meter-suboptimum-value, meter.conformance::-webkit-meter-even-less-good-value { background: var(--ok); }
+meter.conformance::-moz-meter-bar { background: var(--ok); }
+.key-good, .key-bad { display: inline-block; width: 0.8rem; height: 0.55rem; border-radius: 2px; vertical-align: middle; margin: 0 0.2rem 0 0.5rem; }
+.key-good { background: var(--ok); } .key-bad { background: var(--error-soft); border: 1px solid var(--error); }
+
+/* Heat matrix */
+table.matrix td.name { max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.matrix td.number { width: 7rem; }
+.heat-1 { background: color-mix(in srgb, var(--error) 10%, transparent); }
+.heat-2 { background: color-mix(in srgb, var(--error) 22%, transparent); }
+.heat-3 { background: color-mix(in srgb, var(--error) 38%, transparent); }
+.heat-4 { background: color-mix(in srgb, var(--error) 58%, transparent); color: var(--text); font-weight: 700; }
