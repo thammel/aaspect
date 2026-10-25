@@ -38,7 +38,17 @@ def finding_groups(blocks: Iterable[Block]) -> list[FindingGroup]:
 
 
 def is_distribution(block: Block) -> bool:
-    return isinstance(block, Table) and len(block.columns) > 1 and block.columns[-1] == _SHARE
+    """Ends in a share column holding numbers: charts add them up."""
+    return (
+        isinstance(block, Table)
+        and len(block.columns) > 1
+        and block.columns[-1] == _SHARE
+        and all(_is_number(row[-1]) for row in block.rows)
+    )
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 # A share chart with this many parts or fewer reads as one stacked bar.
@@ -64,7 +74,7 @@ def chart_kind(table: Table) -> str:
         if columns >= {"Filled", "Of"}:
             return "filled"
         return "stack" if len(table.rows) <= _MAX_STACKED else "bars"
-    numeric = all(isinstance(row[-1], int | float) for row in table.rows)
+    numeric = all(_is_number(row[-1]) for row in table.rows)
     if len(table.columns) == 2 and numeric and len(table.rows) <= _MAX_TILES:
         return "tiles"
     return "table"

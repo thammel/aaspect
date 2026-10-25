@@ -29,6 +29,7 @@ class TestViews(unittest.TestCase):
         self.assertTrue(is_distribution(Table("t", ("Value", "Count", "Share (%)"), ())))
         self.assertFalse(is_distribution(Table("t", ("Value", "Count"), ())))
         self.assertFalse(is_distribution(_finding("r", Severity.INFO, 0)))
+        self.assertFalse(is_distribution(Table("t", ("Value", "Share (%)"), (("a", "n/a"),))))
 
     def test_chart_kind_follows_the_table_shape(self) -> None:
         share = ("Value", "Count", "Share (%)")
