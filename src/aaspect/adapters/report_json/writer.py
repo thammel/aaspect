@@ -5,7 +5,7 @@ from aaspect.domain.blocks import Block, Finding, Location, Table
 from aaspect.domain.report import Report, Section
 
 # Bump on any change a consumer of downloaded reports could notice.
-FORMAT_VERSION = "2"
+FORMAT_VERSION = "3"
 
 
 class JsonReportWriter:
@@ -31,6 +31,7 @@ def _section(section: Section) -> dict[str, Any]:
         "title": section.title,
         "status": section.status.value,
         "reason": section.reason,
+        "names_every_file": section.names_every_file,
         "blocks": [_block(block) for block in section.blocks],
     }
 
@@ -51,6 +52,8 @@ def _block(block: Block) -> dict[str, Any]:
                 "title": block.title,
                 "columns": list(block.columns),
                 "rows": [list(row) for row in block.rows],
+                "table_kind": block.kind.value,
+                "file_column": block.file_column,
             }
         case _:
             assert_never(block)

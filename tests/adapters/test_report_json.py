@@ -2,7 +2,7 @@ import json
 import unittest
 
 from aaspect.adapters.report_json.writer import FORMAT_VERSION, JsonReportWriter
-from aaspect.domain.blocks import Finding, Location, Severity, Table
+from aaspect.domain.blocks import Finding, Location, Severity, Table, TableKind
 from aaspect.domain.report import Report, Section, SectionStatus
 from aaspect.ports.report_writer import ReportWriter
 
@@ -40,6 +40,7 @@ class TestJsonReportWriter(unittest.TestCase):
                 "title": "Schema",
                 "status": "completed",
                 "reason": None,
+                "names_every_file": False,
                 "blocks": [
                     {
                         "kind": "finding",
@@ -70,7 +71,27 @@ class TestJsonReportWriter(unittest.TestCase):
                 "title": "Versions",
                 "columns": ["version", "files"],
                 "rows": [["3.2", 4], ["3.0", 1]],
+                "table_kind": "plain",
+                "file_column": None,
             },
+        )
+
+    def test_writes_hints_for_renderers(self) -> None:
+        table = Table(
+            "Files",
+            ("File", "Count", "Share (%)"),
+            (("a.aasx", 1, 100.0),),
+            kind=TableKind.SHARES,
+            file_column=0,
+        )
+        section = Section(
+            "schema", "Schema", SectionStatus.COMPLETED, blocks=(table,), names_every_file=True
+        )
+        [written] = _write(_report(section))["sections"]
+        self.assertTrue(written["names_every_file"])
+        self.assertEqual(
+            (written["blocks"][0]["table_kind"], written["blocks"][0]["file_column"]),
+            ("shares", 0),
         )
 
     def test_writes_failed_section_reason(self) -> None:

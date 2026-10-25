@@ -81,7 +81,7 @@ class TestRoutes(unittest.TestCase):
         download = self.client.get(response.headers["location"] + "/report.json")
         self.assertEqual(download.headers["content-type"], "application/json")
         self.assertIn("attachment", download.headers["content-disposition"])
-        self.assertEqual(json.loads(download.content)["format_version"], "2")
+        self.assertEqual(json.loads(download.content)["format_version"], "3")
 
     def test_each_file_has_its_own_page(self) -> None:
         location = self._upload(_files("a.json")).headers["location"]

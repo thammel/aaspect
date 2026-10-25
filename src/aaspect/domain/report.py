@@ -17,18 +17,22 @@ class SectionStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    NOT_CONFIGURED = "not_configured"
 
 
 @dataclass(frozen=True, slots=True)
 class Section:
     """The result of one analysis. A failed section carries the reason instead of blocks,
-    so one failing analysis does not take the rest of the report down."""
+    so one failing analysis does not take the rest of the report down. `names_every_file`
+    promises that each error finding locates every uploaded file it affects; only then
+    does a file without listed errors pass."""
 
     key: str
     title: str
     status: SectionStatus
     blocks: tuple[Block, ...] = ()
     reason: str | None = None
+    names_every_file: bool = False
 
     def __post_init__(self) -> None:
         if self.status is SectionStatus.FAILED and not self.reason:
