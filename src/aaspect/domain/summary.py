@@ -2,7 +2,8 @@
 
 Derived from findings alone, so it covers every analysis without knowing it. Counts are
 of listed locations: an analysis that caps its locations, or names only the first file
-of an object shared by many, makes them lower bounds.
+of an object shared by many, makes them lower bounds, and says so by not promising to
+name every file.
 """
 
 from collections import Counter, defaultdict
@@ -13,6 +14,7 @@ from aaspect.domain.per_file import Owners
 from aaspect.domain.report import Report, Section, SectionStatus
 
 _TOP_RULES = 6
+_DONE = (SectionStatus.COMPLETED, SectionStatus.NOT_CONFIGURED)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,11 +59,15 @@ class Summary:
     failing: tuple[FileIssues, ...]
     sections: tuple[SectionTally, ...]
     top_rules: tuple[RuleTally, ...]
-    # True only once every analysis has completed: a skipped or failed one proves nothing.
+    # True once every analysis has completed or is switched off: a skipped or failed one
+    # proves nothing.
     complete: bool
     # Error findings that name no uploaded file, e.g. a check that could not locate its
     # violations: they count against the corpus, not against any one file.
     unplaced: int = 0
+    # Titles of analyses with errors that may affect files they do not name: a file
+    # without listed errors then does not pass for certain.
+    unlisted: tuple[str, ...] = ()
 
     @property
     def passing(self) -> int:
@@ -92,8 +98,13 @@ def summarize(report: Report) -> Summary:
         failing=tuple(failing),
         sections=sections,
         top_rules=tuple(rules[:_TOP_RULES]),
-        complete=all(section.status is SectionStatus.COMPLETED for section in report.sections),
+        complete=all(section.status in _DONE for section in report.sections),
         unplaced=tally.unplaced,
+        unlisted=tuple(
+            section.title
+            for section, counts in zip(report.sections, sections, strict=True)
+            if counts.errors and not section.names_every_file
+        ),
     )
 
 

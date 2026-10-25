@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from aaspect.domain.blocks import Block, Finding, Location, Table
+from aaspect.domain.blocks import Block, Cell, Finding, Location, Table
 from aaspect.domain.report import Report, Section
 
 
@@ -27,7 +27,8 @@ class Owners:
 
 def file_sections(report: Report, file: str) -> tuple[Section, ...]:
     """Every section narrowed to `file`: findings keep only its locations, tables only the
-    rows whose first cell names it. Corpus-wide tables, such as distributions, drop out."""
+    rows whose file column names it. Tables without a file column are about the whole
+    corpus and drop out."""
     owners = Owners(report.files)
     return tuple(
         replace(section, blocks=tuple(_narrowed(section.blocks, owners, file)))
@@ -42,16 +43,37 @@ def _narrowed(blocks: tuple[Block, ...], owners: Owners, file: str) -> list[Bloc
             locations = tuple(loc for loc in block.locations if _in(loc, owners, file))
             if locations:
                 kept.append(replace(block, locations=locations))
-        else:
-            rows = tuple(
-                row for row in block.rows if isinstance(row[0], str) and owners.of(row[0]) == file
-            )
-            if rows and all(row[0] == file for row in rows) and len(block.columns) > 1:
-                # A column naming the file on every row says nothing on that file's page.
-                kept.append(Table(block.title, block.columns[1:], tuple(r[1:] for r in rows)))
-            elif rows:
-                kept.append(Table(block.title, block.columns, rows))
+        elif block.file_column is not None and (table := _rows_of(block, owners, file)):
+            kept.append(table)
     return kept
+
+
+def _rows_of(table: Table, owners: Owners, file: str) -> Table | None:
+    at = table.file_column
+    assert at is not None
+    rows = tuple(row for row in table.rows if _names(row[at], owners, file))
+    if not rows:
+        return None
+    if all(row[at] == file for row in rows) and len(table.columns) > 1:
+        # A column naming the file on every row says nothing on that file's page.
+        try:
+            return replace(
+                table,
+                columns=_without(table.columns, at),
+                rows=tuple(_without(row, at) for row in rows),
+                file_column=None,
+            )
+        except ValueError:  # Too few columns left for the table's kind.
+            pass
+    return replace(table, rows=rows)
+
+
+def _names(cell: Cell, owners: Owners, file: str) -> bool:
+    return isinstance(cell, str) and owners.of(cell) == file
+
+
+def _without[T](cells: tuple[T, ...], at: int) -> tuple[T, ...]:
+    return cells[:at] + cells[at + 1 :]
 
 
 def _in(location: Location, owners: Owners, file: str) -> bool:

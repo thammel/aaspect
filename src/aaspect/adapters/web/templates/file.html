@@ -28,6 +28,7 @@
   <h1 class="file-name">{{ file }}</h1>
   <p class="meta">{% if ns.total %}{{ ns.total }} error location{{ "s" if ns.total != 1 }}{% elif report.finished and summary.complete %}No errors listed for this file{% else %}No errors listed for this file so far{% endif %}
     {% if not report.finished %} · the analysis is still running{% elif not summary.complete %} · not every analysis completed{% endif %}</p>
+  {% if summary.unlisted and not ns.total %}<p class="hint">{{ summary.unlisted | join(" and ") }} name{{ "s" if summary.unlisted | length == 1 }} only one file per error, so this file may hold content with errors listed under another file.</p>{% endif %}
   {% if ns.total %}
   <p class="pills">{% for section in sections %}{% if ns.errors[section.key] %}<span class="pill hue-{{ loop.index0 % 6 + 1 }}">{{ section.title }} <b>{{ ns.errors[section.key] }}</b></span>{% endif %}{% endfor %}</p>
   {% endif %}
@@ -35,7 +36,7 @@
 
 {% for section in sections %}
 <section class="panel section hue-{{ loop.index0 % 6 + 1 }}" id="section-{{ section.key }}">
-  <div class="section-head"><h2>{{ section.title }}</h2><span class="status status-{{ section.status.value }}">{{ section.status.value }}</span></div>
+  <div class="section-head"><h2>{{ section.title }}</h2><span class="status status-{{ section.status.value }}">{{ section.status.value | replace("_", " ") }}</span></div>
   {% if section.reason %}<p class="reason">{{ section.reason }}</p>
   {% elif not section.blocks %}<p class="empty">{{ "Nothing in this file." if section.status.value == "completed" else "Not run yet." }}</p>
   {% endif %}

@@ -34,7 +34,10 @@ class TestFileSections(unittest.TestCase):
                     "Version per file",
                     ("File", "Version"),
                     (("a.json", "3.0"), ("b.aasx:/x", "3.1")),
+                    file_column=0,
                 ),
+                # Uploaded content that merely looks like a file name decides nothing.
+                Table("Repeated ids", ("Id", "Documents"), (("b.aasx:/x", 2),)),
                 Finding(
                     "pattern", Severity.ERROR, "m", (Location("a.json"), Location("b.aasx:/x"))
                 ),
@@ -57,12 +60,25 @@ class TestFileSections(unittest.TestCase):
         )
 
     def test_a_column_naming_only_this_file_drops_out(self) -> None:
-        table = Table("Version per file", ("File", "Version"), (("a.json", "3.0"),))
+        table = Table("Version per file", ("File", "Version"), (("a.json", "3.0"),), file_column=0)
         section = Section("schema", "Schema check", SectionStatus.COMPLETED, (table,))
         [narrowed] = file_sections(Report("0.1.0", ("a.json",), (section,)), "a.json")
         [kept] = narrowed.blocks
         assert isinstance(kept, Table)
         self.assertEqual((kept.columns, kept.rows), (("Version",), (("3.0",),)))
+
+    def test_the_file_column_can_be_anywhere(self) -> None:
+        table = Table(
+            "Parts",
+            ("Id", "Document", "Count"),
+            (("b.aasx:/y", "a.json", 1), ("urn:x", "b.aasx:/p", 2)),
+            file_column=1,
+        )
+        section = Section("graph", "Graph import", SectionStatus.COMPLETED, (table,))
+        [narrowed] = file_sections(Report("0.1.0", ("a.json", "b.aasx"), (section,)), "b.aasx")
+        [kept] = narrowed.blocks
+        assert isinstance(kept, Table)
+        self.assertEqual((kept.rows, kept.file_column), ((("urn:x", "b.aasx:/p", 2),), 1))
 
 
 if __name__ == "__main__":

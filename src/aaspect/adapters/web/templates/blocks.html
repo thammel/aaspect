@@ -30,7 +30,7 @@
 {{ bars(block.rows[:max_rows], block.columns) }}
 {{ truncated(block.rows, max_rows) }}
 {% else %}
-{{ rows(block.columns, block.rows[:max_rows]) }}
+{{ rows(block.columns, block.rows[:max_rows], block.file_column) }}
 {{ truncated(block.rows, max_rows) }}
 {% endif %}
 </div>
@@ -55,7 +55,7 @@
 {# Conformant against failing submodels per template, with its source and counts as tags. #}
 {% macro scoreboard(block) %}
 {% set c = block.columns %}
-{% set total, good = c.index("Submodels"), c.index("Conformant") %}
+{% set total, good = block.number_columns()[:2] %}
 <ul class="scoreboard" data-collapse>
   {% for row in block.rows %}
   <li>
@@ -63,7 +63,7 @@
     <meter class="conformance" min="0" max="{{ row[total] or 1 }}" low="{{ row[total] }}" value="{{ row[good] }}" title="{{ row[good] }} of {{ row[total] }} conformant"></meter>
     <span class="bar-value">{{ row[good] | number }} <span class="bar-meta">of {{ row[total] | number }}</span></span>
     {% set counts = namespace(parts=[]) %}
-    {% for i in range(c | length) if c[i] not in ("Submodels", "Conformant") and row[i] is number %}{% set counts.parts = counts.parts + [(c[i], row[i])] %}{% endfor %}
+    {% for i in range(c | length) if i not in (total, good) and row[i] is number %}{% set counts.parts = counts.parts + [(c[i], row[i])] %}{% endfor %}
     <span class="score-counts">{% for column, value in counts.parts %}{{ column | lower }} <b>{{ value | number }}</b>{{ " · " if not loop.last }}{% endfor %}</span>
   </li>
   {% endfor %}
@@ -85,9 +85,8 @@
 </div>
 {% endmacro %}
 
-{# Coverage of optional attributes, grouped by the object that has them. #}
+{# Coverage, grouped by the first column; the last three are filled, of and the share. #}
 {% macro filled(block) %}
-{% set c = block.columns %}
 <div class="filled">
   {% for object, rows in block.rows | groupby("0") %}
   <div class="filled-group">
@@ -95,9 +94,9 @@
     <ul class="bars">
       {% for row in rows %}
       <li>
-        <span class="bar-label">{{ row[1] }}</span>
+        <span class="bar-label">{{ row[1:-3] | join(" · ") }}</span>
         <meter min="0" max="100" value="{{ row[-1] }}" title="{{ row[-1] }} %"></meter>
-        <span class="bar-value">{{ row[c.index("Filled")] | number }} <span class="bar-meta">of {{ row[c.index("Of")] | number }}</span></span>
+        <span class="bar-value">{{ row[-3] | number }} <span class="bar-meta">of {{ row[-2] | number }}</span></span>
       </li>
       {% endfor %}
     </ul>
@@ -106,13 +105,15 @@
 </div>
 {% endmacro %}
 
-{% macro rows(columns, shown) %}
+{# Only the column the analysis names as holding files links to file pages: other cells
+   come from uploaded content and may merely look like a file name. #}
+{% macro rows(columns, shown, file_column=none) %}
 <div class="table-wrap">
 <table>
   <thead><tr>{% for column in columns %}<th{% if shown and shown[0][loop.index0] is number %} class="number"{% endif %}>{{ column }}</th>{% endfor %}</tr></thead>
   <tbody data-collapse>
     {% for row in shown %}
-    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{% if loop.first %}{{ file_link(cell) }}{% else %}{{ cell | number }}{% endif %}{{ help(cell) }}</td>{% endfor %}</tr>
+    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{% if loop.index0 == file_column %}{{ file_link(cell) }}{% else %}{{ cell | number }}{% endif %}{{ help(cell) }}</td>{% endfor %}</tr>
     {% endfor %}
   </tbody>
 </table>

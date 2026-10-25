@@ -5,11 +5,15 @@
 <section class="panel summary" id="summary" aria-label="Summary">
   <div class="verdict">
     <div class="ring {{ "ring-pending" if not (report.finished and summary.complete) else ("ring-pass" if summary.clean else "ring-fail") }}">
-      <span class="ring-number">{{ summary.passing }}</span><span class="ring-of">of {{ summary.files }} pass</span>
+      <span class="ring-number">{{ summary.passing }}</span><span class="ring-of">of {{ summary.files }} {{ "without listed errors" if summary.unlisted else "pass" }}</span>
     </div>
     <div>
       <h2>{% if failing %}{{ failing }} file{{ "s" if failing != 1 }} with errors{% elif summary.unplaced %}Errors found{% elif report.finished and summary.complete %}No errors found{% else %}No errors found so far{% endif %}</h2>
+      {% if summary.unlisted %}
+      <p class="meta">{{ summary.passing }} of {{ summary.files }} uploaded file{{ "s" if summary.files != 1 }} have no listed errors. {{ summary.unlisted | join(" and ") }} name{{ "s" if summary.unlisted | length == 1 }} only one file per error, so other files holding the same content may be affected too.</p>
+      {% else %}
       <p class="meta">{{ summary.passing }} of {{ summary.files }} uploaded file{{ "s" if summary.files != 1 }} passed every analysis that ran.</p>
+      {% endif %}
       {% if summary.unplaced %}<p class="unplaced">{{ summary.unplaced }} error finding{{ "s" if summary.unplaced != 1 }} name{{ "s" if summary.unplaced == 1 }} no file and count against the whole corpus; see the analyses below.</p>{% endif %}
       {% if not report.finished %}
       <p class="hint">Preliminary: not every analysis has finished.</p>
@@ -30,7 +34,7 @@
         <span class="chip chip-info{{ " zero" if not tally.notes }}">{{ tally.notes }} note{{ "s" if tally.notes != 1 }}</span>
       </span>
       {% else %}
-      <span class="status status-{{ tally.status.value }}">{{ tally.status.value }}</span>
+      <span class="status status-{{ tally.status.value }}">{{ tally.status.value | replace("_", " ") }}</span>
       {% endif %}
     </a>
     {% endfor %}

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from aaspect.adapters.web.charts import chart_kind, is_distribution, number
+from aaspect.adapters.web.charts import chart_kind, number
 from aaspect.adapters.web.guards import BodySizeLimit, SameOriginPosts, SecurityHeaders
 from aaspect.adapters.web.jobs import Analyze
 from aaspect.adapters.web.routes import Pages, WebLimits, router
@@ -48,7 +48,6 @@ def template_environment(directory: str) -> jinja2.Environment:
     )
     environment.tests["finding"] = lambda block: isinstance(block, Finding)
     environment.tests["table"] = lambda block: isinstance(block, Table)
-    environment.tests["distribution"] = is_distribution
     environment.filters["finding_groups"] = finding_groups
     environment.filters["chart_kind"] = chart_kind
     environment.filters["number"] = number

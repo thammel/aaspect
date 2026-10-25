@@ -116,6 +116,27 @@ class TestSummarize(unittest.TestCase):
         )
         self.assertFalse(summary.complete)
 
+    def test_switched_off_analyses_do_not_hold_the_verdict_back(self) -> None:
+        summary = summarize(
+            _report(
+                Section("schema", "Schema check", SectionStatus.COMPLETED),
+                Section("templates", "Templates", SectionStatus.NOT_CONFIGURED, reason="off"),
+            )
+        )
+        self.assertTrue(summary.complete)
+
+    def test_errors_that_may_miss_files_are_named(self) -> None:
+        error = Finding("AASd-002", Severity.ERROR, "m", _at("a.json"))
+        sections = (
+            Section(
+                "schema", "Schema check", SectionStatus.COMPLETED, (error,), names_every_file=True
+            ),
+            Section("constraints", "Constraints", SectionStatus.COMPLETED, (error,)),
+            # Without errors, a section cannot have missed a file.
+            Section("templates", "Templates", SectionStatus.COMPLETED),
+        )
+        self.assertEqual(summarize(_report(*sections)).unlisted, ("Constraints",))
+
 
 if __name__ == "__main__":
     unittest.main()

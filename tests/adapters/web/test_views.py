@@ -1,10 +1,12 @@
 import unittest
 
-from aaspect.adapters.web.charts import chart_kind, is_distribution, number
+from aaspect.adapters.web.charts import chart_kind, number
 from aaspect.adapters.web.views import file_rows, finding_groups
-from aaspect.domain.blocks import Finding, Location, Severity, Table
+from aaspect.domain.blocks import Finding, Location, Severity, Table, TableKind
 from aaspect.domain.report import Report, Section, SectionStatus
 from aaspect.domain.summary import summarize
+
+SHARES, COVERAGE, CONFORMANCE = TableKind.SHARES, TableKind.COVERAGE, TableKind.CONFORMANCE
 
 
 def _finding(rule: str, severity: Severity, places: int) -> Finding:
@@ -28,13 +30,7 @@ class TestViews(unittest.TestCase):
         groups = finding_groups((_finding("r", Severity.ERROR, 1), _finding("r", Severity.INFO, 1)))
         self.assertEqual(len(groups), 2)
 
-    def test_only_tables_ending_in_a_share_are_distributions(self) -> None:
-        self.assertTrue(is_distribution(Table("t", ("Value", "Count", "Share (%)"), ())))
-        self.assertFalse(is_distribution(Table("t", ("Value", "Count"), ())))
-        self.assertFalse(is_distribution(_finding("r", Severity.INFO, 0)))
-        self.assertFalse(is_distribution(Table("t", ("Value", "Share (%)"), (("a", "n/a"),))))
-
-    def test_chart_kind_follows_the_table_shape(self) -> None:
+    def test_chart_kind_follows_the_table_kind_and_shape(self) -> None:
         share = ("Value", "Count", "Share (%)")
         cases = [
             (Table("t", ("A",), ()), "empty"),
@@ -48,16 +44,18 @@ class TestViews(unittest.TestCase):
                 ),
                 "table",
             ),
-            (Table("t", share, (("a", 1, 50.0), ("b", 1, 50.0))), "stack"),
-            (Table("t", share, tuple((str(i), 1, 20.0) for i in range(5))), "bars"),
+            (Table("t", share, (("a", 1, 50.0), ("b", 1, 50.0)), SHARES), "stack"),
+            (Table("t", share, tuple((str(i), 1, 20.0) for i in range(5)), SHARES), "bars"),
+            # The name of a column decides nothing: only the kind does.
+            (Table("t", share, (("a", 1, 50.0), ("b", 1, 50.0))), "table"),
             (
-                Table("t", ("O", "A", "Filled", "Of", "Share (%)"), (("o", "a", 1, 2, 50.0),) * 2),
+                Table("t", ("O", "A", "Got", "Of", "%"), (("o", "a", 1, 2, 50.0),) * 2, COVERAGE),
                 "filled",
             ),
             (Table("t", ("File", "Version"), (("a", "3.0"), ("b", "3.1"))), "table"),
             (
                 Table(
-                    "t", ("Template", "Source", "Submodels", "Conformant"), (("n", "s", 2, 1),) * 2
+                    "t", ("Template", "Source", "Total", "Ok"), (("n", "s", 2, 1),) * 2, CONFORMANCE
                 ),
                 "scoreboard",
             ),

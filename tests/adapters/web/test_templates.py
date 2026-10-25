@@ -6,7 +6,8 @@ from typing import Any
 
 from aaspect.adapters.web.app import template_environment
 from aaspect.adapters.web.routes import Pages, WebLimits
-from aaspect.domain.blocks import Finding, Severity, Table
+from aaspect.adapters.web.views import FileLinks
+from aaspect.domain.blocks import Finding, Location, Severity, Table, TableKind
 from aaspect.domain.per_file import file_sections
 from aaspect.domain.report import Report, Section, SectionStatus
 from aaspect.domain.summary import summarize
@@ -105,22 +106,58 @@ class TestTemplates(unittest.TestCase):
 
     def test_scoreboard_lists_the_other_counts_of_each_row(self) -> None:
         columns = ("Template", "Source", "Submodels", "Conformant", "Errors", "Notes")
-        table = Table("Per template", columns, (("Nameplate", "IDTA", 4, 1, 7, 2),) * 2)
+        rows = (("Nameplate", "IDTA", 4, 1, 7, 2),) * 2
+        table = Table("Per template", columns, rows, TableKind.CONFORMANCE)
         section = Section("templates", "Templates", SectionStatus.COMPLETED, (table,))
         html = _report_html(Report("0.1.0", ("a.json",), (section,)))
         self.assertIn('<span class="score-counts">errors <b>7</b> · notes <b>2</b></span>', html)
         self.assertIn('<span class="tag">IDTA</span>', html)
 
+    def test_only_the_file_column_links_to_file_pages(self) -> None:
+        table = Table(
+            "Per file",
+            ("Id", "File"),
+            (("a.json", "a.json"), ("urn:x", "a.json")),
+            file_column=1,
+        )
+        section = Section("schema", "Schema check", SectionStatus.COMPLETED, (table,))
+        report = Report("0.1.0", ("a.json",), (section,))
+        html = _html(
+            "report.html",
+            report=report,
+            summary=summarize(report),
+            links=FileLinks(report.files),
+            key="k",
+            state="completed",
+            max_rows=200,
+            max_locations=20,
+        )
+        self.assertEqual(html.count('<a class="file-link" href="/reports/k/files/0">'), 2)
+        self.assertIn("<td>a.json</td>", html)
+
+    def test_a_pass_is_softened_where_files_go_unnamed(self) -> None:
+        error = Finding("AASd-002", Severity.ERROR, "m", (Location("a.json"),))
+        sections = (
+            Section("constraints", "Constraint check", SectionStatus.COMPLETED, (error,)),
+            Section("templates", "Templates", SectionStatus.NOT_CONFIGURED, reason="off"),
+        )
+        html = _report_html(Report("0.1.0", ("a.json", "b.json"), sections))
+        self.assertIn("of 2 without listed errors", html)
+        self.assertIn("Constraint check names only one file per error", html)
+        self.assertIn(">not configured</span>", html)
+        self.assertIn("· 1 not configured", html)
+
     def test_every_chart_kind_renders(self) -> None:
         share = ("Value", "Count", "Share (%)")
         tables = (
             Table("Tiles", ("Object", "Count"), (("Shell", 2), ("Submodel", 5))),
-            Table("Stack", share, (("a", 1, 25.0), ("b", 3, 75.0))),
-            Table("Bars", share, tuple((f"v{i}", 1, 20.0) for i in range(5))),
+            Table("Stack", share, (("a", 1, 25.0), ("b", 3, 75.0)), TableKind.SHARES),
+            Table("Bars", share, tuple((f"v{i}", 1, 20.0) for i in range(5)), TableKind.SHARES),
             Table(
                 "Filled",
                 ("Object", "Attribute", "Filled", "Of", "Share (%)"),
                 (("Shell", "description", 1, 2, 50.0), ("Shell", "category", 0, 2, 0.0)),
+                TableKind.COVERAGE,
             ),
             Table("Matrix", ("Template", "A", "B", "C"), (("n", 1, 0, 1200), ("m", 0, 20, 0))),
         )

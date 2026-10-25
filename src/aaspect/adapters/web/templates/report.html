@@ -21,7 +21,7 @@
 <header class="report-head">
   <h1>Report</h1>
   {% set uploaded = report.files | length %}
-  <p class="meta">{{ uploaded }} uploaded file{{ "s" if uploaded != 1 }} · {{ report.sections | selectattr("status.value", "equalto", "completed") | list | length }}/{{ report.sections | length }} steps completed · AASpect {{ report.aaspect_version }}</p>
+  <p class="meta">{{ uploaded }} uploaded file{{ "s" if uploaded != 1 }} · {{ report.sections | selectattr("status.value", "equalto", "completed") | list | length }}/{{ report.sections | length }} steps completed{% set off = report.sections | selectattr("status.value", "equalto", "not_configured") | list | length %}{% if off %} · {{ off }} not configured{% endif %} · AASpect {{ report.aaspect_version }}</p>
 </header>
 {% if not report.finished %}
 <p class="running">● The analysis is still running. This page updates when a step finishes.</p>
@@ -33,7 +33,7 @@
 {% for section in report.sections %}
 <section class="panel section hue-{{ loop.index0 % 6 + 1 }}" id="section-{{ section.key }}">
 <details open data-section="{{ section.key }}">
-  <summary><h2>{{ section.title }}</h2><span class="status status-{{ section.status.value }}">{{ section.status.value }}</span></summary>
+  <summary><h2>{{ section.title }}</h2><span class="status status-{{ section.status.value }}">{{ section.status.value | replace("_", " ") }}</span></summary>
   {% if section.reason %}<p class="reason">{{ section.reason }}</p>{% endif %}
   <div class="blocks">
   {% for block in section.blocks if block is table %}
