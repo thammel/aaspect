@@ -12,7 +12,9 @@ _FINISHED = ImportResult(0, (), (), ())
 
 class TestAnalyze(unittest.TestCase):
     def test_every_step_gives_its_tables(self) -> None:
-        tallies = {Measure.VALUE_TYPES: Tally((("xs:string", 2),), 2, 1)}
+        tallies: dict[Measure, Tally[str | None]] = {
+            Measure.VALUE_TYPES: Tally((("xs:string", 2),), 2, 1)
+        }
         section = analyze(FixedStatistics(tallies), _FINISHED)
         self.assertEqual((section.key, section.status), (SECTION_KEY, SectionStatus.COMPLETED))
         tables = {block.title: block for block in section.blocks if isinstance(block, Table)}

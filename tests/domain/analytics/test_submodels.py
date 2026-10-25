@@ -1,14 +1,14 @@
 import unittest
 
 from aaspect.domain.analytics.figures import Tally
-from aaspect.domain.analytics.submodels import submodel_tables
+from aaspect.domain.analytics.submodels import Kind, submodel_tables
 
 _NAMEPLATE = "https://admin-shell.io/idta/nameplate/3/0/Nameplate"
 
 
 class TestSubmodelTables(unittest.TestCase):
     def test_groups_by_semantic_id_named_by_the_most_frequent_id_short(self) -> None:
-        tally = Tally(
+        tally: Tally[Kind] = Tally(
             (
                 ((_NAMEPLATE, "Nameplate"), 3),
                 (("0173-1#01-AHF578#001", "Documentation"), 2),
