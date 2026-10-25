@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from aaspect.domain.blocks import Finding, Location, Severity, Table
@@ -6,12 +7,19 @@ from aaspect.domain.report import Report, Section, SectionStatus
 
 
 class TestOwners(unittest.TestCase):
-    def test_package_parts_and_colons_in_upload_names(self) -> None:
-        owners = Owners(("a.json", "b.aasx", "c:d.aasx"))
-        labels = ["a.json", "b.aasx:/aasx/x.json", "c:d.aasx:/p", "elsewhere:/p", None]
+    def test_package_parts_belong_to_their_package(self) -> None:
+        owners = Owners(("a.json", "b.aasx"))
+        labels = ["a.json", "b.aasx:/aasx/x.json", "b.aasx:/odd:part", "elsewhere:/p", None]
         self.assertEqual(
-            [owners.of(label) for label in labels], ["a.json", "b.aasx", "c:d.aasx", None, None]
+            [owners.of(label) for label in labels], ["a.json", "b.aasx", "b.aasx", None, None]
         )
+
+    def test_a_label_full_of_colons_takes_linear_time(self) -> None:
+        owners = Owners(tuple(f"f{i}.aasx" for i in range(2000)))
+        started = time.perf_counter()
+        self.assertIsNone(owners.of(":" * 200_000))
+        self.assertIsNone(owners.of("x" + ":" * 200_000))
+        self.assertLess(time.perf_counter() - started, 0.05)
 
 
 class TestFileSections(unittest.TestCase):

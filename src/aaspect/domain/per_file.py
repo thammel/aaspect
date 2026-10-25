@@ -18,13 +18,11 @@ class Owners:
             return None
         if label in self._files:
             return label
-        # An upload's own name may hold a colon too, so every split point is tried.
-        start = label.find(":")
-        while start != -1:
-            if label[:start] in self._files:
-                return label[:start]
-            start = label.find(":", start + 1)
-        return None
+        # Upload names never hold a colon (the web adapter replaces it), so the package is
+        # everything before the first one. Trying every colon instead costs the square of a
+        # label's length, and part names come from the files.
+        package, separator, _ = label.partition(":")
+        return package if separator and package in self._files else None
 
 
 def file_sections(report: Report, file: str) -> tuple[Section, ...]:

@@ -69,15 +69,15 @@ class TestSummarize(unittest.TestCase):
         rules = summarize(_report(section)).top_rules
         self.assertEqual([rule.rule_id for rule in rules], ["few", "many"])
 
-    def test_unknown_files_and_colons_in_upload_names(self) -> None:
+    def test_parts_count_for_their_package_and_unknown_files_not(self) -> None:
         section = Section(
             "schema",
             "Schema check",
             SectionStatus.COMPLETED,
-            (Finding("x", Severity.ERROR, "m", _at("d:e.aasx:/p", "elsewhere:/p")),),
+            (Finding("x", Severity.ERROR, "m", _at("e.aasx:/p:q", "elsewhere:/p")),),
         )
-        summary = summarize(_report(section, files=("d:e.aasx",)))
-        self.assertEqual([issues.file for issues in summary.failing], ["d:e.aasx"])
+        summary = summarize(_report(section, files=("e.aasx",)))
+        self.assertEqual([issues.file for issues in summary.failing], ["e.aasx"])
 
     def test_an_unfinished_analysis_leaves_the_summary_incomplete(self) -> None:
         summary = summarize(
