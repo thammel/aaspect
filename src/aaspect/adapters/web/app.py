@@ -9,6 +9,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from aaspect.adapters.web.guards import BodySizeLimit, SameOriginPosts, SecurityHeaders
 from aaspect.adapters.web.jobs import Analyze
 from aaspect.adapters.web.routes import Pages, WebLimits, router
+from aaspect.adapters.web.views import finding_groups, is_distribution
 from aaspect.domain.blocks import Finding, Table
 from aaspect.ports.report_writer import ReportWriter
 
@@ -45,4 +46,6 @@ def template_environment(directory: str) -> jinja2.Environment:
     )
     environment.tests["finding"] = lambda block: isinstance(block, Finding)
     environment.tests["table"] = lambda block: isinstance(block, Table)
+    environment.tests["distribution"] = is_distribution
+    environment.filters["finding_groups"] = finding_groups
     return environment

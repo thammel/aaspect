@@ -28,6 +28,12 @@ def full_report() -> Report:
                         (Location(file=XSS, identifiable_id="urn:x"),),
                     ),
                     Finding("info", Severity.INFO, "no locations"),
+                    Finding(
+                        "AASd-119",
+                        Severity.ERROR,
+                        "m",
+                        (Location(file=XSS), Location(file="a.json"), Location(file="a.json")),
+                    ),
                 ),
             ),
             Section("constraints", "Constraints", SectionStatus.FAILED, reason=XSS),

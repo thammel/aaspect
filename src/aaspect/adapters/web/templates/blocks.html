@@ -1,0 +1,96 @@
+{# How each block reads: one-row tables as figures, shares as bars, long tables in full. #}
+
+{% macro table(block, max_rows) %}
+<h3>{{ block.title }}</h3>
+{% if not block.rows %}
+<p class="empty">No rows.</p>
+{% elif block.rows | length == 1 and block.columns | length <= 6 %}
+<dl class="figures">
+  {% for column in block.columns %}
+  <div class="figure"><dt>{{ column }}</dt><dd>{{ block.rows[0][loop.index0] }}</dd></div>
+  {% endfor %}
+</dl>
+{% elif block is distribution %}
+{{ bars(block.rows[:max_rows], block.columns) }}
+{{ truncated(block.rows, max_rows) }}
+{% else %}
+{{ rows(block.columns, block.rows[:max_rows]) }}
+{{ truncated(block.rows, max_rows) }}
+{% endif %}
+{% endmacro %}
+
+{% macro rows(columns, shown) %}
+<div class="table-wrap">
+<table>
+  <thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+  <tbody data-collapse>
+    {% for row in shown %}
+    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{{ cell }}</td>{% endfor %}</tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{# The last column is the share; the one before it the count; any between label and count describe the label. #}
+{% macro bars(shown, columns) %}
+<ul class="bars" data-collapse>
+  {% for row in shown %}
+  <li>
+    <span class="bar-label">{{ row[0] }}{% for cell in row[1:-2] %} <span class="bar-meta">{{ cell }}</span>{% endfor %}</span>
+    <meter min="0" max="100" value="{{ row[-1] }}" title="{{ row[-1] }} %"></meter>
+    <span class="bar-value">{{ row[-2] }} <span class="bar-meta">{{ row[-1] }} %</span></span>
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{% macro truncated(all, max_rows) %}
+{% if all | length > max_rows %}
+<p class="more">{{ all | length - max_rows }} more rows in the JSON download.</p>
+{% endif %}
+{% endmacro %}
+
+{% macro group(group, max_rows, max_locations) %}
+{% set single = group.findings | length == 1 %}
+<details class="group severity-{{ group.severity.value }}">
+  <summary>
+    <span class="sev">{{ group.severity.value }}</span>
+    <code>{{ group.rule_id }}</code>
+    <span class="group-message">{{ "" if single else "e.g. " }}{{ group.findings[0].message }}</span>
+    <span class="count">{% if not single %}{{ group.findings | length }} findings · {% endif %}{{ group.places }} location{{ "s" if group.places != 1 }}</span>
+  </summary>
+  {% if single %}
+  {{ finding_body(group.findings[0], max_locations) }}
+  {% else %}
+  {% for finding in group.findings[:max_rows] %}
+  <details class="finding">
+    <summary><span class="group-message">{{ finding.message }}</span><span class="count">{{ finding.locations | length }} location{{ "s" if finding.locations | length != 1 }}</span></summary>
+    {{ finding_body(finding, max_locations) }}
+  </details>
+  {% endfor %}
+  {% if group.findings | length > max_rows %}
+  <p class="more">{{ group.findings | length - max_rows }} more findings in the JSON download.</p>
+  {% endif %}
+  {% endif %}
+</details>
+{% endmacro %}
+
+{% macro finding_body(finding, max_locations) %}
+<p class="message">{{ finding.message }}</p>
+{% if finding.locations %}
+<div class="table-wrap locations">
+<table>
+  <thead><tr><th>File</th><th>Identifiable</th><th>Element</th></tr></thead>
+  <tbody>
+    {% for location in finding.locations[:max_locations] %}
+    <tr><td>{{ location.file or "–" }}</td><td>{{ location.identifiable_id or "–" }}</td><td><code>{{ location.element_path or "–" }}</code></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if finding.locations | length > max_locations %}
+<p class="more">{{ finding.locations | length - max_locations }} more locations in the JSON download.</p>
+{% endif %}
+{% endif %}
+{% endmacro %}

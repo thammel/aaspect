@@ -14,6 +14,7 @@ from aaspect.adapters.web.uploads import (
     read_form,
 )
 from aaspect.domain.report import Report
+from aaspect.domain.summary import summarize
 from aaspect.ports.report_writer import ReportWriter
 
 # Pages show this much; the JSON download always has everything.
@@ -109,6 +110,7 @@ class _Handlers:
         return self._pages.render(
             "report.html",
             report=report,
+            summary=summarize(report),
             key=key,
             state=_state(report),
             max_rows=_MAX_ROWS,

@@ -7,6 +7,7 @@ from typing import Any
 from aaspect.adapters.web.app import template_environment
 from aaspect.adapters.web.routes import Pages, WebLimits
 from aaspect.domain.report import Report
+from aaspect.domain.summary import summarize
 from tests.adapters.web.reports import XSS, full_report, running_report
 
 LIMITS = WebLimits(
@@ -25,10 +26,24 @@ def _html(name: str, **context: Any) -> str:
 
 def _report_html(report: Report) -> str:
     state = ",".join(section.status.value for section in report.sections)
-    return _html("report.html", report=report, key="k", state=state, max_rows=200, max_locations=20)
+    return _html(
+        "report.html",
+        report=report,
+        summary=summarize(report),
+        key="k",
+        state=state,
+        max_rows=200,
+        max_locations=20,
+    )
 
 
 class TestTemplates(unittest.TestCase):
+    def test_every_page_offers_the_theme_switch(self) -> None:
+        html = _html("upload.html", versions=[("auto", "auto")])
+        self.assertIn('<script src="/static/theme.js"></script>', html)
+        self.assertIn('id="theme-switch"', html)
+        self.assertIn("Analysis of Asset Administration Shell corpora", html)
+
     def test_upload(self) -> None:
         html = _html("upload.html", versions=[("auto", "auto: oldest"), ("3.2", "3.2")])
         self.assertIn('name="files"', html)
@@ -45,9 +60,29 @@ class TestTemplates(unittest.TestCase):
         self.assertIn("50 more rows in the JSON download.", html)
         self.assertIn("5 more locations in the JSON download.", html)
         self.assertIn('href="/reports/k/report.json"', html)
-        self.assertIn("2 uploaded files ·", html)
-        self.assertIn("· 25 locations</h3>", html)
-        self.assertIn("· 1 location</h3>", html)
+        # Number and label may sit in separate elements, depending on the design.
+        self.assertRegex(html, r"\b2\b[^0-9]{0,80}uploaded files")
+        self.assertIn("25 locations", html)
+        self.assertRegex(html, r"\b1 location\b(?!s)")
+
+    def test_summary_names_files_with_errors_first(self) -> None:
+        html = _report_html(full_report())
+        self.assertLess(html.index("Summary"), html.index("Metamodel versions"))
+        self.assertIn("2 files with errors", html)
+        self.assertRegex(
+            html,
+            r'<td class="file">a.json</td>\s*<td><span class="pills">'
+            r'<span class="pill hue-1">Schema',
+        )
+        self.assertIn("Not every analysis completed", html)
+
+    def test_long_tables_fold_and_findings_group_by_rule(self) -> None:
+        html = _report_html(full_report())
+        # Rows past the first few are hidden by tables.js, so the page holds them all.
+        self.assertEqual(html.count("<tbody data-collapse>"), 2)
+        self.assertIn("<td>199</td>", html)
+        self.assertIn('<dl class="figures">', html)
+        self.assertIn('<details class="group severity-error">', html)
 
     def test_every_section_folds_and_starts_open(self) -> None:
         html = _report_html(full_report())
