@@ -122,6 +122,8 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(target("a.js"), f"{location}/files/0")
         self.assertEqual(target("<"), f"{location}/files/1")
         self.assertEqual(target("nothing"), f"{location}/files?q=nothing")
+        self.assertEqual(target("   "), f"{location}/files?q=")
+        self.assertEqual(target("A.JSON"), f"{location}/files/0")
         self.assertEqual(target("a b&c"), f"{location}/files?q=a+b%26c")
 
     def test_report_links_and_offers_every_file(self) -> None:

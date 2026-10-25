@@ -7,6 +7,7 @@ from typing import Any
 from aaspect.adapters.web.app import template_environment
 from aaspect.adapters.web.routes import Pages, WebLimits
 from aaspect.domain.blocks import Finding, Severity, Table
+from aaspect.domain.per_file import file_sections
 from aaspect.domain.report import Report, Section, SectionStatus
 from aaspect.domain.summary import summarize
 from tests.adapters.web.reports import XSS, full_report, running_report
@@ -109,6 +110,48 @@ class TestTemplates(unittest.TestCase):
         html = _report_html(Report("0.1.0", ("a.json",), (section,)))
         self.assertIn('<span class="score-counts">errors <b>7</b> · notes <b>2</b></span>', html)
         self.assertIn('<span class="tag">IDTA</span>', html)
+
+    def test_every_chart_kind_renders(self) -> None:
+        share = ("Value", "Count", "Share (%)")
+        tables = (
+            Table("Tiles", ("Object", "Count"), (("Shell", 2), ("Submodel", 5))),
+            Table("Stack", share, (("a", 1, 25.0), ("b", 3, 75.0))),
+            Table("Bars", share, tuple((f"v{i}", 1, 20.0) for i in range(5))),
+            Table(
+                "Filled",
+                ("Object", "Attribute", "Filled", "Of", "Share (%)"),
+                (("Shell", "description", 1, 2, 50.0), ("Shell", "category", 0, 2, 0.0)),
+            ),
+            Table("Matrix", ("Template", "A", "B", "C"), (("n", 1, 0, 1200), ("m", 0, 20, 0))),
+        )
+        section = Section("analytics", "Analytics", SectionStatus.COMPLETED, tables)
+        html = _report_html(Report("0.1.0", ("a.json",), (section,)))
+        for marker in (
+            'class="block block-tiles"',
+            '<svg class="stack"',
+            '<ul class="bars"',
+            '<div class="filled">',
+            '<table class="matrix">',
+            'class="number heat-4">1,200</td>',
+        ):
+            self.assertIn(marker, html)
+
+    def test_file_page_of_a_running_report_says_so(self) -> None:
+        report = running_report()
+        html = _html(
+            "file.html",
+            report=report,
+            summary=summarize(report),
+            key="k",
+            index=0,
+            file="a.json",
+            sections=file_sections(report, "a.json"),
+            max_rows=200,
+            max_locations=20,
+        )
+        self.assertIn("No errors listed for this file so far", html)
+        self.assertIn("the analysis is still running", html)
+        self.assertIn("Not run yet.", html)
 
     def test_every_section_folds_and_starts_open(self) -> None:
         html = _report_html(full_report())

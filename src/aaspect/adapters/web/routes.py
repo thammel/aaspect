@@ -14,7 +14,7 @@ from aaspect.adapters.web.uploads import (
     UploadRejected,
     read_form,
 )
-from aaspect.adapters.web.views import FileLinks
+from aaspect.adapters.web.views import FileLinks, file_rows
 from aaspect.domain.per_file import file_sections
 from aaspect.domain.report import Report
 from aaspect.domain.summary import summarize
@@ -135,14 +135,7 @@ class _Handlers:
         show = show if show in _SHOW else "all"
         query = q[:_MAX_QUERY]
         summary = summarize(report)
-        failing = {issues.file: issues for issues in summary.failing}
-        rows = [
-            (index, file, failing.get(file))
-            for index, file in enumerate(report.files)
-            if query.lower() in file.lower()
-            and (show == "all" or (show == "errors") == (file in failing))
-        ]
-        rows.sort(key=lambda row: (-(row[2].total if row[2] else 0), row[1]))
+        rows = file_rows(report.files, summary, show, query)
         return self._render(
             report, key, "files.html", summary=summary, rows=rows, show=show, query=query
         )

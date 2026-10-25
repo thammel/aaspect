@@ -1,7 +1,10 @@
 import unittest
 
-from aaspect.adapters.web.views import chart_kind, finding_groups, is_distribution, number
+from aaspect.adapters.web.charts import chart_kind, is_distribution, number
+from aaspect.adapters.web.views import file_rows, finding_groups
 from aaspect.domain.blocks import Finding, Location, Severity, Table
+from aaspect.domain.report import Report, Section, SectionStatus
+from aaspect.domain.summary import summarize
 
 
 def _finding(rule: str, severity: Severity, places: int) -> Finding:
@@ -69,6 +72,20 @@ class TestViews(unittest.TestCase):
             [number(72110), number(3.26), number("1000"), number(True)],
             ["72,110", 3.26, "1000", True],
         )
+
+    def test_file_rows_filter_and_rank(self) -> None:
+        finding = Finding("r", Severity.ERROR, "m", (Location(file="b.json"),) * 2)
+        section = Section("schema", "Schema", SectionStatus.COMPLETED, (finding,))
+        report = Report("0.1.0", ("a.json", "b.json", "c.xml"), (section,))
+        summary = summarize(report)
+
+        def files(show: str, query: str = "") -> list[str]:
+            return [file for _, file, _ in file_rows(report.files, summary, show, query)]
+
+        self.assertEqual(files("all"), ["b.json", "a.json", "c.xml"])
+        self.assertEqual(files("errors"), ["b.json"])
+        self.assertEqual(files("clean", "JSON"), ["a.json"])
+        self.assertEqual(file_rows(report.files, summary, "all", "b")[0][0], 1)
 
 
 if __name__ == "__main__":

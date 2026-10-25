@@ -6,10 +6,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from aaspect.adapters.web.charts import chart_kind, is_distribution, number
 from aaspect.adapters.web.guards import BodySizeLimit, SameOriginPosts, SecurityHeaders
 from aaspect.adapters.web.jobs import Analyze
 from aaspect.adapters.web.routes import Pages, WebLimits, router
-from aaspect.adapters.web.views import chart_kind, finding_groups, is_distribution, number
+from aaspect.adapters.web.views import finding_groups
 from aaspect.domain.blocks import Finding, Table
 from aaspect.domain.metamodel import explain
 from aaspect.ports.report_writer import ReportWriter
