@@ -34,8 +34,8 @@ class TestCheckSchema(unittest.TestCase):
         self.assertEqual((section.key, section.status), (SECTION_KEY, SectionStatus.COMPLETED))
         distribution, per_file, unreadable, violation = section.blocks
         assert isinstance(distribution, Table) and isinstance(per_file, Table)
-        self.assertEqual(distribution.rows, (("3.2", 1), ("3.0", 1)))
-        self.assertEqual([row[0] for row in per_file.rows], ["a.json", "p.aasx:/d.xml"])
+        self.assertEqual(distribution.rows, (("3.2", 1, 1, 0), ("3.0", 1, 0, 1)))
+        self.assertEqual([row[0] for row in per_file.rows], ["p.aasx:/d.xml", "a.json"])
         assert isinstance(unreadable, Finding) and isinstance(violation, Finding)
         self.assertEqual(unreadable.rule_id, "unreadable-file")
         self.assertEqual(unreadable.message, "not a ZIP archive")

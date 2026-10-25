@@ -49,13 +49,13 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(
             blocks["Version per file"]["rows"],
             [
+                ["broken.json", "3.2", "auto: no version valid, fewest violations", "no"],
                 [
                     "shell.json",
                     "3.1",
                     "auto: oldest valid version, newer versions not checked",
                     "yes",
                 ],
-                ["broken.json", "3.2", "auto: no version valid, fewest violations", "no"],
                 ["package.aasx:/aasx/data.xml", "3.0", "XML namespace", "yes"],
             ],
         )

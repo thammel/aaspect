@@ -108,8 +108,11 @@ class TestFileLevelViolations(unittest.TestCase):
     def test_tables_show_not_validated(self) -> None:
         outcome = VersionOutcome(None, VersionBasis.AUTO_OLDEST_FIRST, UNCHECKED)
         distribution, per_file = version_tables([("a.json", outcome)])
-        self.assertEqual(distribution.rows, (("not determined", 1),))
-        self.assertEqual(per_file.rows, (("a.json", "not determined", "not validated", "no"),))
+        self.assertEqual(distribution.columns[-1], "Not validated")
+        self.assertEqual(distribution.rows, (("not determined", 1, 0, 0, 1),))
+        self.assertEqual(
+            per_file.rows, (("a.json", "not determined", "not validated", "not validated"),)
+        )
 
 
 class TestVersionTables(unittest.TestCase):
@@ -122,13 +125,14 @@ class TestVersionTables(unittest.TestCase):
             ("e.json", VersionOutcome(V3_1, VersionBasis.AUTO_OLDEST_FIRST, ())),
         ]
         distribution, per_file = version_tables(results)
-        self.assertEqual(distribution.rows, (("3.2", 2), ("3.1", 2), ("3.0", 1)))
+        self.assertEqual(distribution.columns, ("Version", "Documents", "Valid", "Not valid"))
+        self.assertEqual(distribution.rows, (("3.2", 2, 1, 1), ("3.1", 2, 2, 0), ("3.0", 1, 1, 0)))
         self.assertEqual(
             per_file.rows,
             (
+                ("c.json", "3.2", "auto: no version valid, fewest violations", "no"),
                 ("a.xml", "3.0", "XML namespace", "yes"),
                 ("b.json", "3.2", "auto: newest valid version, older versions not checked", "yes"),
-                ("c.json", "3.2", "auto: no version valid, fewest violations", "no"),
                 ("d.json", "3.1", "chosen by user", "yes"),
                 ("e.json", "3.1", "auto: oldest valid version, newer versions not checked", "yes"),
             ),

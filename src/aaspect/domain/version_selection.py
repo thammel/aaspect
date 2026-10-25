@@ -124,25 +124,45 @@ def _basis_text(outcome: VersionOutcome) -> str:
     return "auto: no version valid, fewest violations"
 
 
+_VALIDITY = ("no", "not validated", "yes")
+
+
+def _validity(outcome: VersionOutcome) -> str:
+    if not outcome.validated:
+        return "not validated"
+    return "yes" if outcome.valid else "no"
+
+
 def version_tables(results: Sequence[tuple[str, VersionOutcome]]) -> tuple[Table, Table]:
-    """The version distribution across the corpus, and the version of each file."""
-    counts = Counter(_version_text(outcome) for _, outcome in results)
+    """The version distribution across the corpus with how many documents are valid, and
+    the version of each file, the ones that are not valid first."""
+    counts = Counter((_version_text(outcome), _validity(outcome)) for _, outcome in results)
+    unchecked = any(validity == "not validated" for _, validity in counts)
+    validities = ("yes", "no", *(("not validated",) if unchecked else ()))
+    versions = [*(version.value for version in NEWEST_FIRST), _UNDETERMINED]
     distribution = Table(
         title="Metamodel versions",
         # Documents, not files: an AASX package can hold several.
-        columns=("Version", "Documents"),
+        columns=(
+            "Version",
+            "Documents",
+            "Valid",
+            "Not valid",
+            *(("Not validated",) if unchecked else ()),
+        ),
         rows=tuple(
-            (text, counts[text])
-            for text in [*(version.value for version in NEWEST_FIRST), _UNDETERMINED]
-            if counts[text]
+            (text, sum(counts[text, v] for v in _VALIDITY), *(counts[text, v] for v in validities))
+            for text in versions
+            if any(counts[text, v] for v in _VALIDITY)
         ),
     )
+    ordered = sorted(results, key=lambda result: _VALIDITY.index(_validity(result[1])))
     per_file = Table(
         title="Version per file",
         columns=("File", "Version", "Determined by", "Valid"),
         rows=tuple(
-            (file, _version_text(outcome), _basis_text(outcome), "yes" if outcome.valid else "no")
-            for file, outcome in results
+            (file, _version_text(outcome), _basis_text(outcome), _validity(outcome))
+            for file, outcome in ordered
         ),
     )
     return distribution, per_file
