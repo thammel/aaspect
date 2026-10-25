@@ -39,7 +39,8 @@ def import_section(result: ImportResult) -> Section:
             ),
         )
     )
-    blocks = (summary, *_repeated(result.occurrences), *unfinished, *not_imported, *collisions)
+    repeated = tuple(table for table in _repeated(result.occurrences) if table.rows)
+    blocks = (summary, *repeated, *unfinished, *not_imported, *collisions)
     return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, blocks)
 
 

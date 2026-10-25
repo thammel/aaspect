@@ -41,6 +41,16 @@ class TestTables(unittest.TestCase):
         self.assertEqual(table.rows, (("(no semanticId)", 2), ("urn:b", 2), ("urn:a", 1)))
         self.assertIn("(3 of 3)", table.title)
 
+    def test_long_ids_sharing_a_prefix_stay_apart(self) -> None:
+        prefix = "urn:" + "x" * 400
+        table = uncovered_table([prefix + "a", prefix + "b"])
+        self.assertEqual([count for _, count in table.rows], [1, 1])
+
+    def test_no_deviations_give_an_empty_table(self) -> None:
+        tally = ConformanceTally()
+        tally.add(_TEMPLATE, _location("a.json"), [])
+        self.assertEqual(deviation_table(tally).rows, ())
+
 
 class TestFindings(unittest.TestCase):
     def test_grouped_without_list_positions_errors_first(self) -> None:

@@ -79,16 +79,16 @@ def deviation_table(tally: ConformanceTally) -> Table:
 
 
 def uncovered_table(semantic_ids: Iterable[str | None]) -> Table:
-    """semanticIds of submodels no template names: what the check did not cover at all."""
-    counts = Counter(
-        short(semantic_id) if semantic_id else "(no semanticId)" for semantic_id in semantic_ids
-    )
-    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    """semanticIds of submodels no template names: what the check did not cover at all.
+    Counted by the full id and shortened only for display, so long ids sharing a prefix
+    stay apart."""
+    counts = Counter(semantic_id or None for semantic_id in semantic_ids)
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0] or ""))
     shown = ranked[:_MAX_UNCOVERED_ROWS]
     return Table(
         f"Submodels without a template, by semanticId ({len(shown)} of {len(ranked)})",
         ("semanticId", "Submodels"),
-        tuple(shown),
+        tuple((short(s) if s else "(no semanticId)", count) for s, count in shown),
     )
 
 

@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterator, Sequence
 
 from aaspect.app.import_corpus import ImportResult
-from aaspect.domain.blocks import Block, Finding, Location, Severity
+from aaspect.domain.blocks import Block, Finding, Location, Severity, Table
 from aaspect.domain.id_collisions import Occurrence
 from aaspect.domain.report import Section, SectionStatus
 from aaspect.domain.templates.catalogue import Catalogue, CatalogueProblem, Template
@@ -81,8 +81,12 @@ def check_templates(
     blocks: list[Block] = [
         summary_table(len(refs), tally, len(matched) - tally.checked),
         template_table(tally),
-        deviation_table(tally),
-        uncovered_table(ref.semantic_id for ref in refs if not catalogue.lookup(ref.semantic_id)),
+        *_with_rows(
+            deviation_table(tally),
+            uncovered_table(
+                ref.semantic_id for ref in refs if not catalogue.lookup(ref.semantic_id)
+            ),
+        ),
         catalogue_table(catalogue),
         *tally.findings(),
         *_unavailable(catalogue),
@@ -93,6 +97,11 @@ def check_templates(
         *_problems(catalogue.problems),
     ]
     return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, tuple(blocks))
+
+
+def _with_rows(*tables: Table) -> Iterator[Table]:
+    """Tables with something to show; an empty one only says "No rows"."""
+    return (table for table in tables if table.rows)
 
 
 def _chunks(
