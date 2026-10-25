@@ -185,10 +185,7 @@ class _Handlers:
         report = self._store.get(key)
         if report is None:
             return JSONResponse({"error": _EXPIRED}, status_code=404)
-        return JSONResponse(
-            {"state": _state(report), "finished": report.finished},
-            headers={"cache-control": "no-store"},
-        )
+        return JSONResponse({"state": _state(report), "finished": report.finished})
 
     def download(self, key: str) -> Response:
         report = self._store.get(key)

@@ -15,6 +15,9 @@ _HEADERS = {
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
 }
+# Reports show what was uploaded: no copy may stay in a browser or proxy cache after the
+# report has expired on the server.
+_REPORT_HEADERS = {"cache-control": "no-store"}
 
 
 class SecurityHeaders:
@@ -22,12 +25,12 @@ class SecurityHeaders:
         self._app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        added = _HEADERS | (_REPORT_HEADERS if scope.get("path", "").startswith("/reports") else {})
+
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
-                headers = [
-                    (k, v) for k, v in message.get("headers", []) if k.decode() not in _HEADERS
-                ]
-                headers += [(k.encode(), v.encode()) for k, v in _HEADERS.items()]
+                headers = [(k, v) for k, v in message.get("headers", []) if k.decode() not in added]
+                headers += [(k.encode(), v.encode()) for k, v in added.items()]
                 message = {**message, "headers": headers}
             await send(message)
 
