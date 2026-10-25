@@ -4,9 +4,11 @@
 It is built on [neo4aas](https://github.com/rwth-iat/neo4aas), which maps AAS data into a
 Neo4j graph and checks it against the metamodel constraints.
 
-> **Status:** early stage. The schema check and the metamodel constraint check work, with
-> their web UI and JSON download (see [Running](#running)); everything marked *planned*
-> below is not built yet.
+> **Status:** early stage. All four analyses work: schema check, metamodel constraints,
+> analytics and submodel template conformance, with a web report (a summary of the files
+> with errors first, charts and a page per uploaded file) and a JSON download (see
+> [Running](#running)). Everything marked *planned* below, such as the PDF export, is
+> not built yet.
 
 ## Features
 
@@ -94,7 +96,7 @@ their first 256 characters.
 
 ## Running
 
-The schema check with its web UI works today:
+Start the server:
 
 ```bash
 uv sync
@@ -103,8 +105,9 @@ uv run aaspect          # then open http://127.0.0.1:8000
 
 Upload AASX, JSON or XML files, or a whole folder, and choose a metamodel version or
 let it be detected per JSON file ("auto"), trying the oldest or the newest version
-first. XML files always use the version of their namespace. The report page opens at once and updates itself as each step finishes. It shows the version of every file and groups recurring schema
-violations; it can be downloaded as JSON. Reports are kept in memory only and are lost
+first. XML files always use the version of their namespace. The report page opens at once and updates itself as each step finishes. It starts with a
+summary of the files with errors, groups recurring findings by rule and gives every
+uploaded file a page of its own; it can be downloaded as JSON. Reports are kept in memory only and are lost
 when the server stops.
 
 At startup the server downloads the official schemas (about 330 KB) and serves nothing
