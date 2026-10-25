@@ -11,6 +11,7 @@ SECTION_KEY = "graph-import"
 SECTION_TITLE = "Graph import"
 # A corpus can hold 100,000 ids; the long tail of small repeats says little.
 _MAX_REPEATED_ROWS = 100
+_CONCEPT = "ConceptDescription"
 
 
 def import_section(result: ImportResult) -> Section:
@@ -38,19 +39,34 @@ def import_section(result: ImportResult) -> Section:
             ),
         )
     )
-    blocks = (summary, _repeated(result.occurrences), *unfinished, *not_imported, *collisions)
+    blocks = (summary, *_repeated(result.occurrences), *unfinished, *not_imported, *collisions)
     return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, blocks)
 
 
-def _repeated(occurrences: tuple[Occurrence, ...]) -> Table:
+def _repeated(occurrences: tuple[Occurrence, ...]) -> tuple[Table, Table]:
+    """Concept descriptions apart from the rest: dictionaries repeat them in every file,
+    so together they would push every shell and submodel off the list."""
     repeated = sorted(
         (o for o in occurrences if o.documents > 1), key=lambda o: (-o.documents, o.original)
     )
+    concepts = [o for o in repeated if o.kind == _CONCEPT]
+    others = [o for o in repeated if o.kind != _CONCEPT]
+    return (
+        _repeated_table("Most repeated objects", others, ("Id", "Type", "Documents")),
+        _repeated_table("Most repeated concept descriptions", concepts, ("Id", "Documents")),
+    )
+
+
+def _repeated_table(title: str, repeated: list[Occurrence], columns: tuple[str, ...]) -> Table:
     shown = repeated[:_MAX_REPEATED_ROWS]
+    with_kind = "Type" in columns
     return Table(
-        f"Most repeated objects ({len(shown)} of {len(repeated)} in more than one document)",
-        ("Id", "Type", "Documents"),
-        tuple((o.original, o.kind, o.documents) for o in shown),
+        f"{title} ({len(shown)} of {len(repeated)} in more than one document)",
+        columns,
+        tuple(
+            (o.original, o.kind, o.documents) if with_kind else (o.original, o.documents)
+            for o in shown
+        ),
     )
 
 

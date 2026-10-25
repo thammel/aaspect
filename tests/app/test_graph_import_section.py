@@ -45,13 +45,16 @@ class TestImportSection(unittest.TestCase):
             ),
         )
 
-        summary, repeated, failure, first, second = import_section(result).blocks
+        summary, repeated, concepts, failure, first, second = import_section(result).blocks
 
         assert isinstance(summary, Table) and isinstance(first, Finding)
         assert isinstance(second, Finding)
         self.assertEqual(summary.rows, ((3, 1, 1),))
-        assert isinstance(repeated, Table)
-        self.assertEqual(repeated.rows, (("cd", "ConceptDescription", 3), ("x", "Submodel", 2)))
+        assert isinstance(repeated, Table) and isinstance(concepts, Table)
+        self.assertEqual(repeated.rows, (("x", "Submodel", 2),))
+        self.assertEqual(concepts.columns, ("Id", "Documents"))
+        self.assertEqual(concepts.rows, (("cd", 3),))
+        self.assertIn("concept descriptions (1 of 1 ", concepts.title)
         self.assertEqual(
             failure,
             Finding(
