@@ -6,7 +6,7 @@ from typing import Any
 
 from aaspect.adapters.web.app import template_environment
 from aaspect.adapters.web.routes import Pages, WebLimits
-from aaspect.domain.blocks import Table
+from aaspect.domain.blocks import Finding, Severity, Table
 from aaspect.domain.report import Report, Section, SectionStatus
 from aaspect.domain.summary import summarize
 from tests.adapters.web.reports import XSS, full_report, running_report
@@ -91,6 +91,15 @@ class TestTemplates(unittest.TestCase):
         section = Section("schema", "Schema check", SectionStatus.COMPLETED, (table,))
         html = _report_html(Report("0.1.0", ("a.json",), (section,)))
         self.assertIn('<th>Version</th><th class="number">Documents</th><th class="number">', html)
+
+    def test_constraint_ids_get_a_help_mark(self) -> None:
+        table = Table("Per constraint", ("Constraint", "Violations"), (("AASd-002", 3), ("x", 1)))
+        finding = Finding("AASd-002", Severity.ERROR, "m")
+        section = Section("constraints", "Constraints", SectionStatus.COMPLETED, (table, finding))
+        html = _report_html(Report("0.1.0", ("a.json",), (section,)))
+        self.assertEqual(html.count('<span class="help" tabindex="0"'), 1)
+        self.assertIn('aria-label="What AASd-002 means: ', html)
+        self.assertIn('<p class="explanation"><b>AASd-002:</b>', html)
 
     def test_every_section_folds_and_starts_open(self) -> None:
         html = _report_html(full_report())

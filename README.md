@@ -227,7 +227,7 @@ src/aaspect/
 │                  and analytics tables, template matching and conformance rules. Pure
 │                  Python, no I/O. metamodel.py holds everything that differs between
 │                  metamodel versions: names, XML namespaces, pinned schemas, the
-│                  constraint checker's rule set.
+│                  constraint checker's rule set, and what each constraint means.
 ├── ports/         Interfaces the use-cases depend on: read uploads, validate a
 │                  document, write a report, parse and import into a graph, count
 │                  in it, download a pinned file.

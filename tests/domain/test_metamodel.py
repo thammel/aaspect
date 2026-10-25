@@ -1,6 +1,6 @@
 import unittest
 
-from aaspect.domain.metamodel import DETAILS, NEWEST_FIRST, MetamodelVersion
+from aaspect.domain.metamodel import _TEXTS, DETAILS, NEWEST_FIRST, MetamodelVersion, explain
 
 
 class TestVersionDetails(unittest.TestCase):
@@ -17,6 +17,16 @@ class TestVersionDetails(unittest.TestCase):
         self.assertEqual(len(schemas), len(DETAILS))
         rules = {details.constraint_rules for details in DETAILS.values()}
         self.assertEqual(len(rules), len(DETAILS))
+
+
+class TestConstraintTexts(unittest.TestCase):
+    def test_every_checked_constraint_is_explained(self) -> None:
+        for rule_id in _TEXTS:
+            with self.subTest(rule_id):
+                self.assertTrue(explain(rule_id))
+
+    def test_other_ids_are_not(self) -> None:
+        self.assertIsNone(explain("minLength"))
 
 
 if __name__ == "__main__":

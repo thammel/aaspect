@@ -3,9 +3,9 @@
 from collections.abc import Iterable, Mapping
 
 from aaspect.domain.blocks import Finding, Location, Severity
-from aaspect.domain.constraints.rules import rule_text
 from aaspect.domain.constraints.violations import Place, RuleResult, RuleStatus
 from aaspect.domain.id_collisions import Occurrence
+from aaspect.domain.metamodel import rule_text
 
 # Ids and idShorts come from the files and can be megabytes long.
 _MAX_TEXT = 256

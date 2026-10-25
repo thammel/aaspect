@@ -15,7 +15,7 @@
 {% elif kind == "tiles" %}
 <dl class="figures">
   {% for row in block.rows %}
-  <div class="figure"><dt>{{ row[0] }}</dt><dd>{{ row[1] | number }}</dd></div>
+  <div class="figure"><dt>{{ row[0] }}{{ help(row[0]) }}</dt><dd>{{ row[1] | number }}</dd></div>
   {% endfor %}
 </dl>
 {% elif kind == "stack" %}
@@ -75,7 +75,7 @@
   <thead><tr>{% for column in columns %}<th{% if shown and shown[0][loop.index0] is number %} class="number"{% endif %}>{{ column }}</th>{% endfor %}</tr></thead>
   <tbody data-collapse>
     {% for row in shown %}
-    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{{ cell | number }}</td>{% endfor %}</tr>
+    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{{ cell | number }}{{ help(cell) }}</td>{% endfor %}</tr>
     {% endfor %}
   </tbody>
 </table>
@@ -112,6 +112,9 @@
     <span class="group-message">{{ "" if single else "e.g. " }}{{ group.findings[0].message }}</span>
     <span class="count">{% if not single %}{{ group.findings | length }} findings · {% endif %}{{ group.places }} location{{ "s" if group.places != 1 }}</span>
   </summary>
+  {# A "?" inside the summary would also fold the group, so the explanation shows on opening. #}
+  {% set explanation = group.rule_id | explain %}
+  {% if explanation %}<p class="explanation"><b>{{ group.rule_id }}:</b> {{ explanation }}</p>{% endif %}
   {% if single %}
   {{ finding_body(group.findings[0], max_locations) }}
   {% else %}
@@ -146,3 +149,7 @@
 {% endif %}
 {% endif %}
 {% endmacro %}
+
+{# A "?" beside a metamodel constraint id that shows what the constraint asks for on hover
+   or keyboard focus. #}
+{% macro help(cell) %}{% set text = cell | explain %}{% if text %}<span class="help" tabindex="0" aria-label="What {{ cell }} means: {{ text }}">?<span class="help-text" role="tooltip">{{ text }}</span></span>{% endif %}{% endmacro %}

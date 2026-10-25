@@ -11,6 +11,7 @@ from aaspect.adapters.web.jobs import Analyze
 from aaspect.adapters.web.routes import Pages, WebLimits, router
 from aaspect.adapters.web.views import chart_kind, finding_groups, is_distribution, number
 from aaspect.domain.blocks import Finding, Table
+from aaspect.domain.metamodel import explain
 from aaspect.ports.report_writer import ReportWriter
 
 _TOO_LARGE = "The upload is larger than the allowed total size."
@@ -50,4 +51,5 @@ def template_environment(directory: str) -> jinja2.Environment:
     environment.filters["finding_groups"] = finding_groups
     environment.filters["chart_kind"] = chart_kind
     environment.filters["number"] = number
+    environment.filters["explain"] = lambda cell: explain(cell) if isinstance(cell, str) else None
     return environment

@@ -2,7 +2,6 @@ import unittest
 
 from aaspect.domain.blocks import Location, Severity
 from aaspect.domain.constraints.findings import violation_findings
-from aaspect.domain.constraints.rules import rule_text
 from aaspect.domain.constraints.violations import (
     ConstraintViolation,
     Place,
@@ -10,6 +9,7 @@ from aaspect.domain.constraints.violations import (
     RuleStatus,
 )
 from aaspect.domain.id_collisions import Occurrence
+from aaspect.domain.metamodel import rule_text
 
 OCCURRENCES = {
     ("sm", 0): Occurrence("sm", "sm", "Submodel", 1, 0, "a.json"),
