@@ -1,6 +1,6 @@
 import unittest
 
-from aaspect.adapters.web.views import finding_groups, is_distribution
+from aaspect.adapters.web.views import chart_kind, finding_groups, is_distribution, number
 from aaspect.domain.blocks import Finding, Location, Severity, Table
 
 
@@ -29,6 +29,38 @@ class TestViews(unittest.TestCase):
         self.assertTrue(is_distribution(Table("t", ("Value", "Count", "Share (%)"), ())))
         self.assertFalse(is_distribution(Table("t", ("Value", "Count"), ())))
         self.assertFalse(is_distribution(_finding("r", Severity.INFO, 0)))
+
+    def test_chart_kind_follows_the_table_shape(self) -> None:
+        share = ("Value", "Count", "Share (%)")
+        cases = [
+            (Table("t", ("A",), ()), "empty"),
+            (Table("t", ("A", "B"), (("x", 1),)), "figures"),
+            (Table("t", ("Object", "Count"), (("a", 1), ("b", 2))), "tiles"),
+            (
+                Table(
+                    "t",
+                    ("M", "Count", "Min", "Max", "Mean", "Median"),
+                    (("d", 1, 1, 2, 1.5, 1),) * 2,
+                ),
+                "table",
+            ),
+            (Table("t", share, (("a", 1, 50.0), ("b", 1, 50.0))), "stack"),
+            (Table("t", share, tuple((str(i), 1, 20.0) for i in range(5))), "bars"),
+            (
+                Table("t", ("O", "A", "Filled", "Of", "Share (%)"), (("o", "a", 1, 2, 50.0),) * 2),
+                "filled",
+            ),
+            (Table("t", ("File", "Version"), (("a", "3.0"), ("b", "3.1"))), "table"),
+        ]
+        for table, kind in cases:
+            with self.subTest(table.columns):
+                self.assertEqual(chart_kind(table), kind)
+
+    def test_whole_numbers_get_separators(self) -> None:
+        self.assertEqual(
+            [number(72110), number(3.26), number("1000"), number(True)],
+            ["72,110", 3.26, "1000", True],
+        )
 
 
 if __name__ == "__main__":

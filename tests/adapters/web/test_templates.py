@@ -6,7 +6,8 @@ from typing import Any
 
 from aaspect.adapters.web.app import template_environment
 from aaspect.adapters.web.routes import Pages, WebLimits
-from aaspect.domain.report import Report
+from aaspect.domain.blocks import Table
+from aaspect.domain.report import Report, Section, SectionStatus
 from aaspect.domain.summary import summarize
 from tests.adapters.web.reports import XSS, full_report, running_report
 
@@ -83,6 +84,13 @@ class TestTemplates(unittest.TestCase):
         self.assertIn("<td>199</td>", html)
         self.assertIn('<dl class="figures">', html)
         self.assertIn('<details class="group severity-error">', html)
+
+    def test_number_columns_align_their_headers(self) -> None:
+        columns = ("Version", "Documents", "Valid")
+        table = Table("Versions", columns, (("3.1", 2, 1), ("3.0", 9, 9)))
+        section = Section("schema", "Schema check", SectionStatus.COMPLETED, (table,))
+        html = _report_html(Report("0.1.0", ("a.json",), (section,)))
+        self.assertIn('<th>Version</th><th class="number">Documents</th><th class="number">', html)
 
     def test_every_section_folds_and_starts_open(self) -> None:
         html = _report_html(full_report())

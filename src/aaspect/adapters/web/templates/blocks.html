@@ -1,31 +1,81 @@
 {# How each block reads: one-row tables as figures, shares as bars, long tables in full. #}
 
 {% macro table(block, max_rows) %}
+{% set kind = block | chart_kind %}
+<div class="block block-{{ kind }}">
 <h3>{{ block.title }}</h3>
-{% if not block.rows %}
+{% if kind == "empty" %}
 <p class="empty">No rows.</p>
-{% elif block.rows | length == 1 and block.columns | length <= 6 %}
+{% elif kind == "figures" %}
 <dl class="figures">
   {% for column in block.columns %}
-  <div class="figure"><dt>{{ column }}</dt><dd>{{ block.rows[0][loop.index0] }}</dd></div>
+  <div class="figure"><dt>{{ column }}</dt><dd>{{ block.rows[0][loop.index0] | number }}</dd></div>
   {% endfor %}
 </dl>
-{% elif block is distribution %}
+{% elif kind == "tiles" %}
+<dl class="figures">
+  {% for row in block.rows %}
+  <div class="figure"><dt>{{ row[0] }}</dt><dd>{{ row[1] | number }}</dd></div>
+  {% endfor %}
+</dl>
+{% elif kind == "stack" %}
+{{ stack(block) }}
+{% elif kind == "filled" %}
+{{ filled(block) }}
+{% elif kind == "bars" %}
 {{ bars(block.rows[:max_rows], block.columns) }}
 {{ truncated(block.rows, max_rows) }}
 {% else %}
 {{ rows(block.columns, block.rows[:max_rows]) }}
 {{ truncated(block.rows, max_rows) }}
 {% endif %}
+</div>
+{% endmacro %}
+
+{# Shares of a few parts as one bar; segments take their colour from their position. #}
+{% macro stack(block) %}
+{% set at = namespace(x=0) %}
+<svg class="stack" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="{{ block.title }}">
+  {% for row in block.rows %}
+  <rect class="seg-{{ loop.index }}" x="{{ at.x }}" y="0" width="{{ row[-1] }}" height="6"><title>{{ row[0] }}: {{ row[-1] }} %</title></rect>
+  {% set at.x = at.x + row[-1] %}
+  {% endfor %}
+</svg>
+<ul class="legend">
+  {% for row in block.rows %}
+  <li><span class="swatch seg-{{ loop.index }}" aria-hidden="true"></span><span class="bar-label"><span class="bar-name" title="{{ row[0] }}">{{ row[0] }}</span>{% for cell in row[1:-2] %}<span class="tag">{{ cell }}</span>{% endfor %}</span><span class="bar-value">{{ row[-2] | number }} <span class="bar-meta">{{ row[-1] }} %</span></span></li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{# Coverage of optional attributes, grouped by the object that has them. #}
+{% macro filled(block) %}
+{% set c = block.columns %}
+<div class="filled">
+  {% for object, rows in block.rows | groupby("0") %}
+  <div class="filled-group">
+    <h4>{{ object }}</h4>
+    <ul class="bars">
+      {% for row in rows %}
+      <li>
+        <span class="bar-label">{{ row[1] }}</span>
+        <meter min="0" max="100" value="{{ row[-1] }}" title="{{ row[-1] }} %"></meter>
+        <span class="bar-value">{{ row[c.index("Filled")] | number }} <span class="bar-meta">of {{ row[c.index("Of")] | number }}</span></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</div>
 {% endmacro %}
 
 {% macro rows(columns, shown) %}
 <div class="table-wrap">
 <table>
-  <thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+  <thead><tr>{% for column in columns %}<th{% if shown and shown[0][loop.index0] is number %} class="number"{% endif %}>{{ column }}</th>{% endfor %}</tr></thead>
   <tbody data-collapse>
     {% for row in shown %}
-    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{{ cell }}</td>{% endfor %}</tr>
+    <tr>{% for cell in row %}<td{% if cell is number %} class="number"{% endif %}>{{ cell | number }}</td>{% endfor %}</tr>
     {% endfor %}
   </tbody>
 </table>
@@ -34,12 +84,14 @@
 
 {# The last column is the share; the one before it the count; any between label and count describe the label. #}
 {% macro bars(shown, columns) %}
+{# Scaled to the largest share, so a long tail of small shares still tells apart. #}
+{% set top = shown | map("last") | max %}
 <ul class="bars" data-collapse>
   {% for row in shown %}
   <li>
-    <span class="bar-label">{{ row[0] }}{% for cell in row[1:-2] %} <span class="bar-meta">{{ cell }}</span>{% endfor %}</span>
-    <meter min="0" max="100" value="{{ row[-1] }}" title="{{ row[-1] }} %"></meter>
-    <span class="bar-value">{{ row[-2] }} <span class="bar-meta">{{ row[-1] }} %</span></span>
+    <span class="bar-label"><span class="bar-name" title="{{ row[0] }}">{{ row[0] }}</span>{% for cell in row[1:-2] %}<span class="tag">{{ cell }}</span>{% endfor %}</span>
+    <meter min="0" max="{{ top or 1 }}" value="{{ row[-1] }}" title="{{ row[-1] }} %"></meter>
+    <span class="bar-value">{{ row[-2] | number }} <span class="bar-meta">{{ row[-1] }} %</span></span>
   </li>
   {% endfor %}
 </ul>

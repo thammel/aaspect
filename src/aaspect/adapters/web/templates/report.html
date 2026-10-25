@@ -34,9 +34,11 @@
 <details open data-section="{{ section.key }}">
   <summary><h2>{{ section.title }}</h2><span class="status status-{{ section.status.value }}">{{ section.status.value }}</span></summary>
   {% if section.reason %}<p class="reason">{{ section.reason }}</p>{% endif %}
+  <div class="blocks">
   {% for block in section.blocks if block is table %}
   {{ blocks.table(block, max_rows) }}
   {% endfor %}
+  </div>
   {% set groups = section.blocks | finding_groups %}
   {% if groups %}
   <h3>Findings <span class="hint">{{ groups | length }} rule{{ "s" if groups | length != 1 }}, click to open</span></h3>
