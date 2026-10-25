@@ -137,12 +137,12 @@ _TEXTS = {
 # quoted from the specification.
 _EXPLANATIONS = {
     "AASd-002": "An idShort starts with a letter and holds only letters, digits and"
-    " underscores. From 3.1 it may also hold hyphens, but then has at least two"
-    " characters and does not end with one. Spaces, dots and umlauts are the usual cause.",
+    " underscores. From 3.1 it may also hold hyphens, has at least two characters and does"
+    " not end with a hyphen. Spaces, dots and umlauts are the usual cause.",
     "AASd-005": "AdministrativeInformation may only carry a revision together with a"
     " version: a revision of no version means nothing.",
     "AASd-014": "A self-managed entity names its asset by globalAssetId or"
-    " specificAssetIds. In version 3.0 a co-managed entity may name neither.",
+    " specificAssetIds. In version 3.0 a co-managed entity must name neither.",
     "AASd-021": "Each qualifier type may appear only once on the same element, so a value"
     " like a cardinality cannot be stated twice.",
     "AASd-022": "Siblings in one namespace, such as the elements of one collection, need"
