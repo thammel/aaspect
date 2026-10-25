@@ -9,7 +9,13 @@ from aaspect.domain.report import Section, SectionStatus
 from aaspect.domain.templates.catalogue import Catalogue, CatalogueProblem, Template
 from aaspect.domain.templates.check import deviations
 from aaspect.domain.templates.instances import SubmodelRef
-from aaspect.domain.templates.report import catalogue_table, summary_table, template_table
+from aaspect.domain.templates.report import (
+    catalogue_table,
+    deviation_table,
+    summary_table,
+    template_table,
+    uncovered_table,
+)
 from aaspect.domain.templates.tally import ConformanceTally, short
 from aaspect.domain.templates.work import TooMuchWork
 from aaspect.ports.submodel_trees import SubmodelTrees
@@ -75,6 +81,8 @@ def check_templates(
     blocks: list[Block] = [
         summary_table(len(refs), tally, len(matched) - tally.checked),
         template_table(tally),
+        deviation_table(tally),
+        uncovered_table(ref.semantic_id for ref in refs if not catalogue.lookup(ref.semantic_id)),
         catalogue_table(catalogue),
         *tally.findings(),
         *_unavailable(catalogue),

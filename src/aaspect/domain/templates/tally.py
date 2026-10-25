@@ -48,6 +48,9 @@ class TemplateCounts:
     conformant: int = 0
     errors: int = 0
     notes: int = 0
+    # Places per kind of deviation, to tell whether a template mostly misses elements or
+    # mostly has them in another type.
+    by_kind: Counter[DeviationKind] = field(default_factory=Counter)
 
 
 class ConformanceTally:
@@ -68,6 +71,7 @@ class ConformanceTally:
         )
         errors = notes = 0
         for deviation in found:
+            counts.by_kind[deviation.kind] += 1
             if SEVERITY[deviation.kind] is Severity.ERROR:
                 errors += 1
             else:

@@ -4,7 +4,12 @@ from aaspect.domain.blocks import Location, Severity
 from aaspect.domain.templates import tally as tally_module
 from aaspect.domain.templates.catalogue import Template, Tier
 from aaspect.domain.templates.check import Deviation, DeviationKind
-from aaspect.domain.templates.report import summary_table, template_table
+from aaspect.domain.templates.report import (
+    deviation_table,
+    summary_table,
+    template_table,
+    uncovered_table,
+)
 from aaspect.domain.templates.tally import ConformanceTally
 
 _TEMPLATE = Template("Nameplate", Tier.CURRENT, "urn:nameplate", ())
@@ -23,6 +28,18 @@ class TestTables(unittest.TestCase):
         tally.add(_TEMPLATE, _location("b.json"), [_MISSING, _NOTE])
         self.assertEqual(summary_table(5, tally, unchecked=1).rows, ((5, 3, 2, 1, 1, 2),))
         self.assertEqual(template_table(tally).rows, (("Nameplate", "IDTA, current", 2, 1, 1, 1),))
+
+    def test_deviations_per_kind_leave_out_unseen_kinds(self) -> None:
+        tally = ConformanceTally()
+        tally.add(_TEMPLATE, _location("a.json"), [_MISSING, _MISSING, _NOTE])
+        table = deviation_table(tally)
+        self.assertEqual(table.columns, ("Template", "Missing", "Not in template"))
+        self.assertEqual(table.rows, (("Nameplate", 2, 1),))
+
+    def test_uncovered_semantic_ids_ranked_and_named(self) -> None:
+        table = uncovered_table(["urn:b", None, "urn:a", "urn:b", ""])
+        self.assertEqual(table.rows, (("(no semanticId)", 2), ("urn:b", 2), ("urn:a", 1)))
+        self.assertIn("(3 of 3)", table.title)
 
 
 class TestFindings(unittest.TestCase):
