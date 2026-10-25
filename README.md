@@ -103,12 +103,18 @@ uv sync
 uv run aaspect          # then open http://127.0.0.1:8000
 ```
 
+Started like this, without a graph database, the server runs the schema check only; the
+graph import, constraint check, analytics and template conformance show as "not
+configured". [With Docker](#with-docker) starts the database as well, and
+[Graph database](#graph-database) connects to one of your own.
+
 Upload AASX, JSON or XML files, or a whole folder, and choose a metamodel version or
 let it be detected per JSON file ("auto"), trying the oldest or the newest version
-first. XML files always use the version of their namespace. The report page opens at once and updates itself as each step finishes. It starts with a
-summary of the files with errors, groups recurring findings by rule and gives every
-uploaded file a page of its own; it can be downloaded as JSON. Reports are kept in memory only and are lost
-when the server stops.
+first. XML files always use the version of their namespace. The report page opens at
+once and updates itself as each step finishes. It starts with a summary of the files
+with errors, groups recurring findings by rule and gives every uploaded file a page of
+its own; it can be downloaded as JSON. Reports are kept in memory only and are lost when
+the server stops.
 
 At startup the server downloads the official schemas (about 330 KB) and serves nothing
 before they have arrived. While the download fails it logs why and tries again, with
@@ -198,14 +204,15 @@ exceeds its limits; the file then gets a "not validated" finding.
 
 ### Graph database
 
-The metamodel constraint check imports each corpus into a database of its own on a
-Neo4j server with the DozerDB plugin (see `compose.yaml`), and drops it afterward.
+The constraint check, analytics and template conformance work on a graph of the corpus:
+each analysis imports it into a database of its own on a Neo4j server with the DozerDB
+plugin (see `compose.yaml`), and drops it afterward.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `AASPECT_NEO4J_URI` | `bolt://127.0.0.1:7687` | Address of the Neo4j server. |
 | `AASPECT_NEO4J_USER` | `neo4j` | User AASpect logs in as. It creates and drops databases, so it needs administration rights. |
-| `AASPECT_NEO4J_PASSWORD` | none | Password of that user. Never shown in logs or error messages. Without it, the graph import is skipped. |
+| `AASPECT_NEO4J_PASSWORD` | none | Password of that user. Never shown in logs or error messages. Without it, the graph import and every step after it show as "not configured". |
 
 ### Exposing the server
 
@@ -227,8 +234,8 @@ only on those two. `main.py` alone wires the adapters to the use-cases.
 src/aaspect/
 ├── domain/        Analysis rules and result types: report sections, findings, tables,
 │                  version selection, grouping of violations, identifier classification
-│                  and analytics tables, template matching and conformance rules. Pure
-│                  Python, no I/O. metamodel.py holds everything that differs between
+│                  and analytics tables, template matching and conformance rules, the
+│                  report summary and its narrowing to one file. Pure Python, no I/O. metamodel.py holds everything that differs between
 │                  metamodel versions: names, XML namespaces, pinned schemas, the
 │                  constraint checker's rule set, and what each constraint means.
 ├── ports/         Interfaces the use-cases depend on: read uploads, validate a
