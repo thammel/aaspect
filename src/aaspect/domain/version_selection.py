@@ -115,10 +115,11 @@ def _version_text(outcome: VersionOutcome) -> str:
 
 
 def _basis_text(outcome: VersionOutcome) -> str:
-    if not outcome.validated:
-        return "not validated"
+    """How the version was found; the validity column already says whether it was checked."""
     if outcome.basis in _FIXED:
         return _BASIS_TEXT[outcome.basis]
+    if not outcome.validated:
+        return "auto: the file could not be checked"
     if outcome.valid:
         return _UNCHECKED_TEXT[outcome.basis]
     return "auto: no version valid, fewest violations"

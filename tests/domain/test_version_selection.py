@@ -110,9 +110,11 @@ class TestFileLevelViolations(unittest.TestCase):
         distribution, per_file = version_tables([("a.json", outcome)])
         self.assertEqual(distribution.columns[-1], "Not validated")
         self.assertEqual(distribution.rows, (("not determined", 1, 0, 0, 1),))
-        self.assertEqual(
-            per_file.rows, (("a.json", "not determined", "not validated", "not validated"),)
-        )
+        auto = ("a.json", "not determined", "auto: the file could not be checked", "not validated")
+        self.assertEqual(per_file.rows, (auto,))
+        declared = VersionOutcome(V3_0, VersionBasis.DECLARED, UNCHECKED)
+        _, per_file = version_tables([("a.xml", declared)])
+        self.assertEqual(per_file.rows, (("a.xml", "3.0", "XML namespace", "not validated"),))
 
 
 class TestVersionTables(unittest.TestCase):
