@@ -59,6 +59,8 @@ class TestCheckConstraints(unittest.TestCase):
         self.assertIn("Determined as version 3.0", other.message)
         self.assertEqual(violation.locations, (Location("a.json", "sm", "x.y"),))
         self.assertIn("2 file occurrences", violation.message)
+        # A shared object names only its first file.
+        self.assertFalse(section.names_every_file)
 
     def test_chosen_version_is_used(self) -> None:
         graph = RecordingGraph(RESULT)

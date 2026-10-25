@@ -41,7 +41,10 @@ def import_section(result: ImportResult) -> Section:
     )
     repeated = tuple(table for table in _repeated(result.occurrences) if table.rows)
     blocks = (summary, *repeated, *unfinished, *not_imported, *collisions)
-    return Section(SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, blocks)
+    # Its only errors are documents not imported, each named.
+    return Section(
+        SECTION_KEY, SECTION_TITLE, SectionStatus.COMPLETED, blocks, names_every_file=True
+    )
 
 
 def _repeated(occurrences: tuple[Occurrence, ...]) -> tuple[Table, Table]:

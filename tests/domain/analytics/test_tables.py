@@ -10,6 +10,7 @@ from aaspect.domain.analytics.tables import (
     text,
     text_ranking,
 )
+from aaspect.domain.blocks import TableKind
 
 
 class TestShare(unittest.TestCase):
@@ -23,6 +24,7 @@ class TestRanking(unittest.TestCase):
         table = ranking("T", ("Value",), [(("a",), 3), (("b",), 1)], 4)
         self.assertEqual(table.columns, ("Value", "Count", "Share (%)"))
         self.assertEqual(table.rows, (("a", 3, 75.0), ("b", 1, 25.0)))
+        self.assertEqual(table.kind, TableKind.SHARES)
 
     def test_sums_up_rows_past_the_limit(self) -> None:
         rows = [((str(n), "x"), 1) for n in range(SHOWN_ROWS + 5)]

@@ -22,7 +22,9 @@ class TestFirstContentNotImported(unittest.TestCase):
         self.assertEqual(
             result.collisions, (Collision("x", (("b.json",), ("c.json",)), first_missing=True),)
         )
-        first = import_section(result).blocks[-2]
+        section = import_section(result)
+        self.assertTrue(section.names_every_file)
+        first = section.blocks[-2]
         assert isinstance(first, Finding)
         self.assertIn("lead nowhere", first.message)
         self.assertNotIn("lead to this content", first.message)

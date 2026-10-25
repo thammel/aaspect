@@ -5,7 +5,7 @@ from collections import Counter
 from collections.abc import Iterable
 
 from aaspect.domain.analytics.figures import Tally
-from aaspect.domain.blocks import Cell, Table
+from aaspect.domain.blocks import Cell, Table, TableKind
 
 # Rows listed per ranking; the rest are summed up in one row.
 SHOWN_ROWS = 100
@@ -49,7 +49,7 @@ def ranking(
     if unaccounted > 0:
         label = "(further values, not listed)"
         shown.append((label, *padding, unaccounted, share(unaccounted, total)))
-    return Table(title, (*columns, "Count", "Share (%)"), tuple(shown))
+    return Table(title, (*columns, "Count", "Share (%)"), tuple(shown), TableKind.SHARES)
 
 
 def text_ranking(title: str, column: str, tally: Tally[str | None]) -> Table:

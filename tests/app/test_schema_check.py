@@ -32,8 +32,10 @@ class TestCheckSchema(unittest.TestCase):
         section = result.section
 
         self.assertEqual((section.key, section.status), (SECTION_KEY, SectionStatus.COMPLETED))
+        self.assertTrue(section.names_every_file)
         distribution, per_file, unreadable, violation = section.blocks
         assert isinstance(distribution, Table) and isinstance(per_file, Table)
+        self.assertEqual((distribution.file_column, per_file.file_column), (None, 0))
         self.assertEqual(distribution.rows, (("3.2", 1, 1, 0), ("3.0", 1, 0, 1)))
         self.assertEqual([row[0] for row in per_file.rows], ["p.aasx:/d.xml", "a.json"])
         assert isinstance(unreadable, Finding) and isinstance(violation, Finding)

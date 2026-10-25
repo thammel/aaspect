@@ -8,6 +8,7 @@ from aaspect.domain.analytics.structure import (
     size_tables,
     text_value_table,
 )
+from aaspect.domain.blocks import TableKind
 
 
 class TestElementType(unittest.TestCase):
@@ -52,6 +53,7 @@ class TestTables(unittest.TestCase):
                 ("SubmodelElement", "qualifiers", 1, 2, 50.0),
             ),
         )
+        self.assertEqual(attribute_table(uses).kind, TableKind.COVERAGE)
 
 
 if __name__ == "__main__":

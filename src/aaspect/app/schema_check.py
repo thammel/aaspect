@@ -72,5 +72,7 @@ def check_schema(
         title=SECTION_TITLE,
         status=SectionStatus.COMPLETED,
         blocks=(*version_tables(outcomes), *unreadable, *violations),
+        # Each document is validated on its own, and every violation names its document.
+        names_every_file=True,
     )
     return SchemaCheckResult(section, judged)

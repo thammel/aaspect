@@ -3,7 +3,7 @@
 from collections import Counter
 from collections.abc import Iterable
 
-from aaspect.domain.blocks import Table
+from aaspect.domain.blocks import Table, TableKind
 from aaspect.domain.templates.catalogue import Catalogue
 from aaspect.domain.templates.check import DeviationKind
 from aaspect.domain.templates.tally import ConformanceTally, TemplateCounts, short
@@ -64,6 +64,7 @@ def template_table(tally: ConformanceTally) -> Table:
             (short(name), tier, c.submodels, c.conformant, c.errors, c.notes)
             for (name, tier), c in _ordered(tally)
         ),
+        TableKind.CONFORMANCE,
     )
 
 

@@ -42,10 +42,10 @@ class TestAnalyzeCorpus(unittest.TestCase):
         section = analyze.run(UPLOADS, AUTO).sections[0]
         self.assertIn("analysis-time-limit", [getattr(b, "rule_id", "") for b in section.blocks])
 
-    def test_graph_import_is_skipped_without_a_database(self) -> None:
+    def test_graph_steps_are_not_configured_without_a_database(self) -> None:
         report = AnalyzeCorpus(FakeReader(CORPUS), FakeValidator({}), "0.1.0").run(UPLOADS, AUTO)
-        self.assertEqual(report.sections[1].status, SectionStatus.SKIPPED)
-        self.assertEqual(report.sections[2].status, SectionStatus.SKIPPED)
+        self.assertEqual(report.sections[1].status, SectionStatus.NOT_CONFIGURED)
+        self.assertEqual(report.sections[2].status, SectionStatus.NOT_CONFIGURED)
 
     def test_graph_import_runs_in_a_graph_of_its_own(self) -> None:
         store = FakeStore()
@@ -204,24 +204,24 @@ class TestAnalyzeCorpus(unittest.TestCase):
         self.assertEqual(
             states,
             [
-                ("waiting", "waiting", "waiting", "waiting", "skipped"),
-                ("running", "waiting", "waiting", "waiting", "skipped"),
-                ("completed", "running", "waiting", "waiting", "skipped"),
-                ("completed", "completed", "waiting", "waiting", "skipped"),
-                ("completed", "completed", "waiting", "running", "skipped"),
-                ("completed", "completed", "waiting", "completed", "skipped"),
-                ("completed", "completed", "running", "completed", "skipped"),
-                ("completed", "completed", "completed", "completed", "skipped"),
+                ("waiting", "waiting", "waiting", "waiting", "not_configured"),
+                ("running", "waiting", "waiting", "waiting", "not_configured"),
+                ("completed", "running", "waiting", "waiting", "not_configured"),
+                ("completed", "completed", "waiting", "waiting", "not_configured"),
+                ("completed", "completed", "waiting", "running", "not_configured"),
+                ("completed", "completed", "waiting", "completed", "not_configured"),
+                ("completed", "completed", "running", "completed", "not_configured"),
+                ("completed", "completed", "completed", "completed", "not_configured"),
             ],
         )
         self.assertTrue(report.finished)
 
-    def test_unconfigured_graph_import_is_skipped_from_the_start(self) -> None:
+    def test_unconfigured_graph_import_shows_from_the_start(self) -> None:
         states: list[str] = []
         AnalyzeCorpus(FakeReader(CORPUS), FakeValidator({}), "0.1.0").run(
             UPLOADS, AUTO, lambda r: states.append(r.sections[1].status.value)
         )
-        self.assertEqual(states, ["skipped"] * 3)
+        self.assertEqual(states, ["not_configured"] * 3)
 
     def test_time_limit_reaches_the_graph_import(self) -> None:
         analyze = AnalyzeCorpus(

@@ -131,9 +131,9 @@ class AnalyzeCorpus:
 
     def _waiting(self, key: str, checks_templates: bool) -> Section:
         if key != _SCHEMA and (self._graph_store is None or self._parser is None):
-            return _skipped(key, "No graph database is configured.")
+            return _not_configured(key, "No graph database is configured.")
         if key == _TEMPLATES and not checks_templates:
-            return _skipped(key, "No submodel templates are configured.")
+            return _not_configured(key, "No submodel templates are configured.")
         return Section(key, _TITLES[key], SectionStatus.WAITING)
 
     def _graph_steps(
@@ -190,6 +190,10 @@ def _running(key: str) -> Section:
 
 def _skipped(key: str, reason: str) -> Section:
     return Section(key, _TITLES[key], SectionStatus.SKIPPED, reason=reason)
+
+
+def _not_configured(key: str, reason: str) -> Section:
+    return Section(key, _TITLES[key], SectionStatus.NOT_CONFIGURED, reason=reason)
 
 
 def _failed(key: str, error: Exception) -> Section:

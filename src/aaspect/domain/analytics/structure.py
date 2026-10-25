@@ -5,7 +5,7 @@ from collections import Counter
 from aaspect.domain.analytics.element_types import element_type
 from aaspect.domain.analytics.figures import AttributeUse, CorpusSizes, Spread, Tally
 from aaspect.domain.analytics.tables import grouped, share
-from aaspect.domain.blocks import Cell, Table
+from aaspect.domain.blocks import Cell, Table, TableKind
 
 
 def size_tables(sizes: CorpusSizes) -> tuple[Table, Table]:
@@ -61,6 +61,7 @@ def attribute_table(uses: tuple[AttributeUse, ...]) -> Table:
         "Optional attributes filled",
         ("Object", "Attribute", "Filled", "Of", "Share (%)"),
         tuple(rows),
+        TableKind.COVERAGE,
     )
 
 
@@ -77,6 +78,7 @@ def text_value_table(sizes: CorpusSizes) -> Table:
             ),
             ("Property (xs:string)", sizes.string_properties, share(sizes.string_properties, both)),
         ),
+        TableKind.SHARES,
     )
 
 

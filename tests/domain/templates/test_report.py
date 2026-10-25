@@ -1,6 +1,6 @@
 import unittest
 
-from aaspect.domain.blocks import Location, Severity
+from aaspect.domain.blocks import Location, Severity, TableKind
 from aaspect.domain.templates import tally as tally_module
 from aaspect.domain.templates.catalogue import Template, Tier
 from aaspect.domain.templates.check import Deviation, DeviationKind
@@ -28,6 +28,7 @@ class TestTables(unittest.TestCase):
         tally.add(_TEMPLATE, _location("b.json"), [_MISSING, _NOTE])
         self.assertEqual(summary_table(5, tally, unchecked=1).rows, ((5, 3, 2, 1, 1, 2),))
         self.assertEqual(template_table(tally).rows, (("Nameplate", "IDTA, current", 2, 1, 1, 1),))
+        self.assertEqual(template_table(tally).kind, TableKind.CONFORMANCE)
 
     def test_deviations_per_kind_leave_out_unseen_kinds(self) -> None:
         tally = ConformanceTally()

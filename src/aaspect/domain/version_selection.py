@@ -164,5 +164,6 @@ def version_tables(results: Sequence[tuple[str, VersionOutcome]]) -> tuple[Table
             (file, _version_text(outcome), _basis_text(outcome), _validity(outcome))
             for file, outcome in ordered
         ),
+        file_column=0,
     )
     return distribution, per_file
